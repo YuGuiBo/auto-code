@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://flowable.org/test">
+
+    <process id="simpleProcess" name="简单流程示例" isExecutable="true">
+        
+        <startEvent id="startEvent" name="开始"/>
+        
+        <sequenceFlow id="flow1" sourceRef="startEvent" targetRef="userTask1"/>
+        
+        <userTask id="userTask1" name="用户任务1" flowable:assignee="user1">
+            <documentation>这是第一个用户任务</documentation>
+        </userTask>
+        
+        <sequenceFlow id="flow2" sourceRef="userTask1" targetRef="userTask2"/>
+        
+        <userTask id="userTask2" name="用户任务2" flowable:assignee="user2">
+            <documentation>这是第二个用户任务</documentation>
+        </userTask>
+        
+        <sequenceFlow id="flow3" sourceRef="userTask2" targetRef="endEvent"/>
+        
+        <endEvent id="endEvent" name="结束"/>
+        
+    </process>
+
+</definitions>

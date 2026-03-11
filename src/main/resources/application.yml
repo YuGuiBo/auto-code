@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: flowable-demo
+  
+  # 数据库配置
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:15432/Asset
+    username: asset
+    password: asset
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+  
+  # JPA配置
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+
+# Flowable配置
+flowable:
+  # 自动部署processes目录下的流程文件
+  process-definition-location-prefix: classpath*:/processes/
+  process-definition-location-suffixes: "**.bpmn20.xml,**.bpmn"
+  
+  # 数据库配置
+  database-schema-update: true
+  
+  # 异步执行器配置
+  async-executor-activate: true
+  
+  # 历史记录级别（full: 记录所有历史信息）
+  history-level: full
+  
+  # 是否检查流程定义
+  check-process-definitions: true
+
+# 服务器配置
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    org.flowable: DEBUG
+    org.springframework.web: INFO
+    org.hibernate: INFO
+    com.example.flowable: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/flowable-demo.log
