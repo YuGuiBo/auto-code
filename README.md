@@ -1,6 +1,6 @@
-# Flowable Demo 项目
+# Auto Code 项目
 
-这是一个基于 Flowable 7.0.1 + Spring Boot 3.2.1 + PostgreSQL 的工作流引擎示例项目。
+这是一个基于 Flowable 7.0.1 + Spring Boot 3.2.1 + PostgreSQL 的工作流引擎项目。
 
 ## 📋 项目信息
 
@@ -194,7 +194,7 @@ GET /api/task/finished/{assignee}
 ## 📁 项目结构
 
 ```
-flowable-demo/
+auto-code/
 ├── src/
 │   ├── main/
 │   │   ├── java/

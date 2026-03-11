@@ -1,6 +1,6 @@
 spring:
   application:
-    name: flowable-demo
+    name: auto-code
   
   # 数据库配置
   datasource:
@@ -59,4 +59,4 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
   file:
-    name: logs/flowable-demo.log
+    name: logs/auto-code.log

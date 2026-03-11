@@ -13,10 +13,10 @@
     </parent>
 
     <groupId>com.example</groupId>
-    <artifactId>flowable-demo</artifactId>
+    <artifactId>auto-code</artifactId>
     <version>1.0.0</version>
-    <name>Flowable Demo</name>
-    <description>Flowable 7.0.1 + Spring Boot 3.2.1 + PostgreSQL Demo Project</description>
+    <name>Auto Code</name>
+    <description>Auto Code - Flowable 7.0.1 + Spring Boot 3.2.1 + PostgreSQL Project</description>
 
     <properties>
         <java.version>17</java.version>
