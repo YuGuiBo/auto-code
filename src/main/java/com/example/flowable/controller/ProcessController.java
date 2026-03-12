@@ -32,7 +32,7 @@ public class ProcessController {
     public ResponseEntity<Map<String, String>> health() {
         Map<String, String> response = new HashMap<>();
         response.put("status", "UP");
-        response.put("service", "Flowable Demo");
+        response.put("service", "Auto Code");
         return ResponseEntity.ok(response);
     }
 

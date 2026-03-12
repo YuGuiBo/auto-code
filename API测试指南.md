@@ -26,7 +26,7 @@ curl -X GET http://localhost:8080/api/process/health
 # 预期响应
 {
   "status": "UP",
-  "service": "Flowable Demo"
+  "service": "Auto Code"
 }
 ```
 
