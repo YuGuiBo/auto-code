@@ -5,6 +5,7 @@ import com.example.flowable.service.ProcessService;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,6 +26,9 @@ public class ProcessController {
     @Autowired
     private ProcessService processService;
 
+    @Value("${spring.application.name}")
+    private String applicationName;
+
     /**
      * 健康检查
      */
@@ -32,7 +36,7 @@ public class ProcessController {
     public ResponseEntity<Map<String, String>> health() {
         Map<String, String> response = new HashMap<>();
         response.put("status", "UP");
-        response.put("service", "Auto Code");
+        response.put("service", applicationName);
         return ResponseEntity.ok(response);
     }
 
