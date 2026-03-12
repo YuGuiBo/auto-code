@@ -1,12 +1,8 @@
 package com.example.flowable.config;
 
 import org.flowable.engine.*;
-import org.flowable.spring.SpringProcessEngineConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.transaction.PlatformTransactionManager;
-
-import javax.sql.DataSource;
 
 /**
  * Flowable 配置类
