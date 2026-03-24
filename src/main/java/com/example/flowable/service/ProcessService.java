@@ -1,7 +1,11 @@
 package com.example.flowable.service;
 
+import com.example.flowable.model.ProcessInstanceDTO;
+import com.example.flowable.util.ProcessInstanceMapper;
+import org.flowable.engine.HistoryService;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
+import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.repository.Deployment;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.runtime.ProcessInstance;
@@ -16,7 +20,6 @@ import java.util.Map;
  * 流程服务类
  * 
  * @author Generated
- * @date 2026-03-11
  */
 @Service
 public class ProcessService {
@@ -26,6 +29,12 @@ public class ProcessService {
 
     @Autowired
     private RepositoryService repositoryService;
+    
+    @Autowired
+    private HistoryService historyService;
+    
+    @Autowired
+    private ProcessInstanceMapper processInstanceMapper;
 
     /**
      * 启动流程实例
@@ -57,9 +66,35 @@ public class ProcessService {
     public List<ProcessInstance> getProcessInstances() {
         return runtimeService.createProcessInstanceQuery().list();
     }
+    
+    /**
+     * 按状态查询流程实例（包括运行中和已结束的流程）
+     * 
+     * @param status 状态字符串
+     * @return 流程实例DTO列表
+     */
+    public List<ProcessInstanceDTO> getProcessInstancesByStatus(String status) {
+        List<ProcessInstanceDTO> result = new java.util.ArrayList<>();
+        
+        // 1. 查询运行中的流程实例
+        List<ProcessInstance> runningInstances = runtimeService.createProcessInstanceQuery()
+                .variableValueEquals("status", status)
+                .list();
+        result.addAll(processInstanceMapper.toDTOList(runningInstances));
+        
+        // 2. 查询已结束的历史流程实例
+        List<HistoricProcessInstance> historicInstances = historyService
+                .createHistoricProcessInstanceQuery()
+                .finished() // 只查询已结束的流程
+                .variableValueEquals("status", status)
+                .list();
+        result.addAll(processInstanceMapper.toDTOListFromHistoric(historicInstances));
+        
+        return result;
+    }
 
     /**
-     * 根据流程实例ID查询
+     * 根据流程实例ID查询运行中的流程
      * 
      * @param processInstanceId 流程实例ID
      * @return 流程实例
@@ -68,6 +103,25 @@ public class ProcessService {
         return runtimeService.createProcessInstanceQuery()
                 .processInstanceId(processInstanceId)
                 .singleResult();
+    }
+    
+    /**
+     * 根据流程实例ID查询历史流程（包括已结束的流程）
+     * 
+     * @param processInstanceId 流程实例ID
+     * @return 流程实例DTO，如果不存在返回null
+     */
+    public ProcessInstanceDTO getHistoricProcessInstanceById(String processInstanceId) {
+        HistoricProcessInstance historicInstance = historyService
+                .createHistoricProcessInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .singleResult();
+        
+        if (historicInstance != null) {
+            return processInstanceMapper.toDTO(historicInstance);
+        }
+        
+        return null;
     }
 
     /**

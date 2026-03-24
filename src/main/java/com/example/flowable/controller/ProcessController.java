@@ -1,7 +1,9 @@
 package com.example.flowable.controller;
 
+import com.example.flowable.model.ProcessInstanceDTO;
 import com.example.flowable.model.ProcessStartRequest;
 import com.example.flowable.service.ProcessService;
+import com.example.flowable.util.ProcessInstanceMapper;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,7 +19,6 @@ import java.util.Map;
  * 流程管理控制器
  * 
  * @author Generated
- * @date 2026-03-11
  */
 @RestController
 @RequestMapping("/api/process")
@@ -25,6 +26,9 @@ public class ProcessController {
 
     @Autowired
     private ProcessService processService;
+    
+    @Autowired
+    private ProcessInstanceMapper processInstanceMapper;
 
     @Value("${spring.application.name}")
     private String applicationName;
@@ -76,24 +80,49 @@ public class ProcessController {
     }
 
     /**
-     * 查询所有流程实例
+     * 查询所有流程实例（包含状态信息）
      */
     @GetMapping("/instances")
-    public ResponseEntity<List<ProcessInstance>> getProcessInstances() {
+    public ResponseEntity<List<ProcessInstanceDTO>> getProcessInstances() {
         List<ProcessInstance> instances = processService.getProcessInstances();
-        return ResponseEntity.ok(instances);
+        List<ProcessInstanceDTO> instanceDTOs = processInstanceMapper.toDTOList(instances);
+        return ResponseEntity.ok(instanceDTOs);
     }
 
     /**
-     * 根据ID查询流程实例
+     * 根据ID查询流程实例（包含状态信息）
+     * 支持查询运行中的流程和已结束的历史流程
      */
     @GetMapping("/instance/{processInstanceId}")
-    public ResponseEntity<ProcessInstance> getProcessInstanceById(@PathVariable String processInstanceId) {
+    public ResponseEntity<ProcessInstanceDTO> getProcessInstanceById(@PathVariable String processInstanceId) {
+        // 先查询运行中的流程实例
         ProcessInstance instance = processService.getProcessInstanceById(processInstanceId);
         if (instance != null) {
-            return ResponseEntity.ok(instance);
-        } else {
-            return ResponseEntity.notFound().build();
+            ProcessInstanceDTO instanceDTO = processInstanceMapper.toDTO(instance);
+            return ResponseEntity.ok(instanceDTO);
+        }
+        
+        // 如果运行中的流程不存在，查询历史流程
+        ProcessInstanceDTO historicInstanceDTO = processService.getHistoricProcessInstanceById(processInstanceId);
+        if (historicInstanceDTO != null) {
+            return ResponseEntity.ok(historicInstanceDTO);
+        }
+        
+        return ResponseEntity.notFound().build();
+    }
+    
+    /**
+     * 按状态查询流程实例（包括运行中和已结束的流程）
+     * 
+     * @param status 状态（SUBMITTED, PENDING_MANAGER_APPROVAL, PENDING_DEPT_MANAGER_APPROVAL, APPROVED, REJECTED, INSUFFICIENT_LEAVE）
+     */
+    @GetMapping("/instances/by-status/{status}")
+    public ResponseEntity<List<ProcessInstanceDTO>> getProcessInstancesByStatus(@PathVariable String status) {
+        try {
+            List<ProcessInstanceDTO> instanceDTOs = processService.getProcessInstancesByStatus(status);
+            return ResponseEntity.ok(instanceDTOs);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
         }
     }
 

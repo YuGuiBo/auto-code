@@ -1,79 +1,36 @@
 package com.example.flowable.config;
 
-import org.flowable.engine.*;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
  * Flowable 配置类
  * 
+ * Spring Boot的Flowable Starter会自动配置所有必要的服务，
+ * 包括：RuntimeService、TaskService、RepositoryService、HistoryService等。
+ * 
+ * 如果需要自定义配置，可以在application.yml中配置flowable属性，
+ * 或者在这里添加自定义的Bean。
+ * 
  * @author Generated
- * @date 2026-03-11
  */
 @Configuration
 public class FlowableConfig {
-
+    
     /**
-     * 流程引擎配置
-     * Spring Boot Starter 会自动配置，这里可以进行自定义配置
+     * Flowable Spring Boot Starter 自动配置说明：
+     * 
+     * 1. ProcessEngine - 流程引擎自动配置
+     * 2. RuntimeService - 流程实例管理服务
+     * 3. TaskService - 任务管理服务
+     * 4. RepositoryService - 流程定义管理服务
+     * 5. HistoryService - 历史数据查询服务
+     * 6. ManagementService - 引擎管理服务
+     * 
+     * 这些服务可以直接在其他类中使用@Autowired注入，无需手动配置。
+     * 
+     * 配置参数在application.yml中的flowable节点下设置。
      */
-    // @Bean
-    // public SpringProcessEngineConfiguration processEngineConfiguration(
-    //         DataSource dataSource,
-    //         PlatformTransactionManager transactionManager) {
-        
-    //     SpringProcessEngineConfiguration config = new SpringProcessEngineConfiguration();
-    //     config.setDataSource(dataSource);
-    //     config.setTransactionManager(transactionManager);
-    //     config.setDatabaseSchemaUpdate("true");
-    //     config.setAsyncExecutorActivate(true);
-    //     config.setHistoryLevel(HistoryLevel.FULL);
-        
-    //     return config;
-    // }
-
-    /**
-     * 注入 RuntimeService
-     * 用于流程实例管理
-     */
-    @Bean
-    public RuntimeService runtimeService(ProcessEngine processEngine) {
-        return processEngine.getRuntimeService();
-    }
-
-    /**
-     * 注入 TaskService
-     * 用于任务管理
-     */
-    @Bean
-    public TaskService taskService(ProcessEngine processEngine) {
-        return processEngine.getTaskService();
-    }
-
-    /**
-     * 注入 RepositoryService
-     * 用于流程定义管理
-     */
-    @Bean
-    public RepositoryService repositoryService(ProcessEngine processEngine) {
-        return processEngine.getRepositoryService();
-    }
-
-    /**
-     * 注入 HistoryService
-     * 用于历史数据查询
-     */
-    @Bean
-    public HistoryService historyService(ProcessEngine processEngine) {
-        return processEngine.getHistoryService();
-    }
-
-    /**
-     * 注入 ManagementService
-     * 用于引擎管理
-     */
-    @Bean
-    public ManagementService managementService(ProcessEngine processEngine) {
-        return processEngine.getManagementService();
-    }
+    
+    // 这里可以添加自定义的Bean或配置
+    // 例如：自定义监听器、拦截器等
 }

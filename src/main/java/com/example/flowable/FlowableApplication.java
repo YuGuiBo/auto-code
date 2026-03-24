@@ -7,7 +7,6 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * Auto Code 应用启动类
  * 
  * @author Generated
- * @date 2026-03-11
  */
 @SpringBootApplication
 public class FlowableApplication {

@@ -1,7 +1,9 @@
 package com.example.flowable.controller;
 
 import com.example.flowable.model.TaskCompleteRequest;
+import com.example.flowable.model.TaskDTO;
 import com.example.flowable.service.TaskServiceImpl;
+import com.example.flowable.util.TaskMapper;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.history.HistoricTaskInstance;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,7 +18,6 @@ import java.util.Map;
  * 任务管理控制器
  * 
  * @author Generated
- * @date 2026-03-11
  */
 @RestController
 @RequestMapping("/api/task")
@@ -29,28 +30,31 @@ public class TaskController {
      * 查询所有待办任务
      */
     @GetMapping("/list")
-    public ResponseEntity<List<Task>> getAllTasks() {
+    public ResponseEntity<List<TaskDTO>> getAllTasks() {
         List<Task> tasks = taskService.getAllTasks();
-        return ResponseEntity.ok(tasks);
+        List<TaskDTO> taskDTOs = TaskMapper.toDTOList(tasks);
+        return ResponseEntity.ok(taskDTOs);
     }
 
     /**
      * 根据执行人查询待办任务
      */
     @GetMapping("/assignee/{assignee}")
-    public ResponseEntity<List<Task>> getTasksByAssignee(@PathVariable String assignee) {
+    public ResponseEntity<List<TaskDTO>> getTasksByAssignee(@PathVariable String assignee) {
         List<Task> tasks = taskService.getTasksByAssignee(assignee);
-        return ResponseEntity.ok(tasks);
+        List<TaskDTO> taskDTOs = TaskMapper.toDTOList(tasks);
+        return ResponseEntity.ok(taskDTOs);
     }
 
     /**
      * 根据任务ID查询任务
      */
     @GetMapping("/{taskId}")
-    public ResponseEntity<Task> getTaskById(@PathVariable String taskId) {
+    public ResponseEntity<TaskDTO> getTaskById(@PathVariable String taskId) {
         Task task = taskService.getTaskById(taskId);
         if (task != null) {
-            return ResponseEntity.ok(task);
+            TaskDTO taskDTO = TaskMapper.toDTO(task);
+            return ResponseEntity.ok(taskDTO);
         } else {
             return ResponseEntity.notFound().build();
         }
@@ -146,18 +150,20 @@ public class TaskController {
      * 查询候选任务
      */
     @GetMapping("/candidate/user/{candidateUser}")
-    public ResponseEntity<List<Task>> getCandidateTasks(@PathVariable String candidateUser) {
+    public ResponseEntity<List<TaskDTO>> getCandidateTasks(@PathVariable String candidateUser) {
         List<Task> tasks = taskService.getCandidateTasks(candidateUser);
-        return ResponseEntity.ok(tasks);
+        List<TaskDTO> taskDTOs = TaskMapper.toDTOList(tasks);
+        return ResponseEntity.ok(taskDTOs);
     }
 
     /**
      * 查询候选组任务
      */
     @GetMapping("/candidate/group/{candidateGroup}")
-    public ResponseEntity<List<Task>> getCandidateGroupTasks(@PathVariable String candidateGroup) {
+    public ResponseEntity<List<TaskDTO>> getCandidateGroupTasks(@PathVariable String candidateGroup) {
         List<Task> tasks = taskService.getCandidateGroupTasks(candidateGroup);
-        return ResponseEntity.ok(tasks);
+        List<TaskDTO> taskDTOs = TaskMapper.toDTOList(tasks);
+        return ResponseEntity.ok(taskDTOs);
     }
 
     /**

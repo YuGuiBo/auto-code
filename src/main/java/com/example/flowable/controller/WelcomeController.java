@@ -7,7 +7,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -16,7 +15,6 @@ import java.util.Map;
  * 提供项目信息和API文档
  * 
  * @author Generated
- * @date 2026-03-12
  */
 @RestController
 public class WelcomeController {

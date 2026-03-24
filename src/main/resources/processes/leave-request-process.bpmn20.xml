@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://flowable.org/leave">
+
+    <process id="leaveRequestProcess" name="员工请假流程（多级审批）" isExecutable="true">
+        
+        <!-- 开始事件 -->
+        <startEvent id="startEvent" name="开始"/>
+        
+        <sequenceFlow sourceRef="startEvent" targetRef="checkRemainingDaysGateway"/>
+        
+        <!-- 第一个判断：检查剩余假期是否足够 -->
+        <exclusiveGateway id="checkRemainingDaysGateway" name="检查剩余假期"/>
+        
+        <!-- 剩余假期不足，直接拒绝 -->
+        <sequenceFlow sourceRef="checkRemainingDaysGateway" targetRef="insufficientLeaveEndEvent">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${leaveDays > remainingDays}]]>
+            </conditionExpression>
+        </sequenceFlow>
+        
+        <!-- 剩余假期足够，继续判断是否需要多级审批 -->
+        <sequenceFlow sourceRef="checkRemainingDaysGateway" targetRef="checkLeaveDaysGateway">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${leaveDays <= remainingDays}]]>
+            </conditionExpression>
+        </sequenceFlow>
+        
+        <!-- 第二个判断：检查请假天数是否超过3天 -->
+        <exclusiveGateway id="checkLeaveDaysGateway" name="检查请假天数"/>
+        
+        <!-- 请假天数 <= 3天，只需直接经理审批 -->
+        <sequenceFlow sourceRef="checkLeaveDaysGateway" targetRef="managerApprovalTask">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${leaveDays <= 3}]]>
+            </conditionExpression>
+        </sequenceFlow>
+        
+        <!-- 请假天数 > 3天，需要多级审批 -->
+        <sequenceFlow sourceRef="checkLeaveDaysGateway" targetRef="managerFirstApprovalTask">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${leaveDays > 3}]]>
+            </conditionExpression>
+        </sequenceFlow>
+        
+        <!-- ========== 短期请假（<= 3天）：只需直接经理审批 ========== -->
+        
+        <!-- 直接经理审批（短期请假） -->
+        <userTask id="managerApprovalTask" name="直接经理审批" 
+                  flowable:candidateGroups="manager">
+            <documentation>直接经理审批短期请假（3天以内）</documentation>
+        </userTask>
+        
+        <sequenceFlow sourceRef="managerApprovalTask" targetRef="shortLeaveApprovalGateway"/>
+        
+        <!-- 短期请假审批结果判断 -->
+        <exclusiveGateway id="shortLeaveApprovalGateway" name="审批结果"/>
+        
+        <sequenceFlow sourceRef="shortLeaveApprovalGateway" targetRef="approveEndEvent">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${approved == true}]]>
+            </conditionExpression>
+        </sequenceFlow>
+        
+        <sequenceFlow sourceRef="shortLeaveApprovalGateway" targetRef="rejectEndEvent">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${approved == false}]]>
+            </conditionExpression>
+        </sequenceFlow>
+        
+        <!-- ========== 长期请假（> 3天）：需要多级审批 ========== -->
+        
+        <!-- 直接经理初审（长期请假） -->
+        <userTask id="managerFirstApprovalTask" name="直接经理初审" 
+                  flowable:candidateGroups="manager">
+            <documentation>直接经理初审长期请假（超过3天）</documentation>
+        </userTask>
+        
+        <sequenceFlow sourceRef="managerFirstApprovalTask" targetRef="managerFirstApprovalGateway"/>
+        
+        <!-- 直接经理初审结果判断 -->
+        <exclusiveGateway id="managerFirstApprovalGateway" name="直接经理审批结果"/>
+        
+        <!-- 直接经理拒绝，流程结束 -->
+        <sequenceFlow sourceRef="managerFirstApprovalGateway" targetRef="rejectEndEvent">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${managerApproved == false}]]>
+            </conditionExpression>
+        </sequenceFlow>
+        
+        <!-- 直接经理同意，提交给部门经理 -->
+        <sequenceFlow sourceRef="managerFirstApprovalGateway" targetRef="departmentManagerApprovalTask">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${managerApproved == true}]]>
+            </conditionExpression>
+        </sequenceFlow>
+        
+        <!-- 部门经理审批 -->
+        <userTask id="departmentManagerApprovalTask" name="部门经理审批" 
+                  flowable:candidateGroups="department-manager">
+            <documentation>部门经理审批长期请假（超过3天）</documentation>
+        </userTask>
+        
+        <sequenceFlow sourceRef="departmentManagerApprovalTask" targetRef="departmentManagerApprovalGateway"/>
+        
+        <!-- 部门经理审批结果判断 -->
+        <exclusiveGateway id="departmentManagerApprovalGateway" name="部门经理审批结果"/>
+        
+        <sequenceFlow sourceRef="departmentManagerApprovalGateway" targetRef="approveEndEvent">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${deptManagerApproved == true}]]>
+            </conditionExpression>
+        </sequenceFlow>
+        
+        <sequenceFlow sourceRef="departmentManagerApprovalGateway" targetRef="rejectEndEvent">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${deptManagerApproved == false}]]>
+            </conditionExpression>
+        </sequenceFlow>
+        
+        <!-- ========== 结束事件 ========== -->
+        
+        <!-- 结束事件 - 批准 -->
+        <endEvent id="approveEndEvent" name="请假批准"/>
+        
+        <!-- 结束事件 - 拒绝 -->
+        <endEvent id="rejectEndEvent" name="请假拒绝"/>
+        
+        <!-- 结束事件 - 假期不足 -->
+        <endEvent id="insufficientLeaveEndEvent" name="假期不足，自动拒绝"/>
+        
+    </process>
+
+</definitions>
