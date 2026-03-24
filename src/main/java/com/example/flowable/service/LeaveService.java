@@ -2,18 +2,26 @@ package com.example.flowable.service;
 
 import com.example.flowable.enums.LeaveRequestStatus;
 import com.example.flowable.model.LeaveRequestDTO;
+import com.example.flowable.model.ProcessInstanceDTO;
+import com.example.flowable.model.TaskDTO;
+import com.example.flowable.util.LeaveProcessMapper;
+import com.example.flowable.util.LeaveTaskMapper;
+import org.flowable.engine.HistoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
+import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
  * 请假服务类
+ * 整合了请假业务逻辑、流程查询和任务管理功能
  * 
  * @author Generated
  */
@@ -25,6 +33,12 @@ public class LeaveService {
 
     @Autowired
     private TaskService taskService;
+
+    @Autowired
+    private HistoryService historyService;
+
+    @Autowired
+    private LeaveProcessMapper leaveProcessMapper;
 
     /**
      * 申请请假
@@ -170,5 +184,47 @@ public class LeaveService {
         result.put("variables", variables);
         
         return result;
+    }
+
+    /**
+     * 根据流程实例ID查询流程（支持运行中的流程和历史流程）
+     * 
+     * @param processInstanceId 流程实例ID
+     * @return 流程实例DTO，如果不存在返回null
+     */
+    public ProcessInstanceDTO getProcessInstanceById(String processInstanceId) {
+        // 先查询运行中的流程实例
+        ProcessInstance instance = runtimeService.createProcessInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .singleResult();
+        
+        if (instance != null) {
+            return leaveProcessMapper.toDTO(instance);
+        }
+        
+        // 如果运行中的流程不存在，查询历史流程
+        HistoricProcessInstance historicInstance = historyService
+                .createHistoricProcessInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .singleResult();
+        
+        if (historicInstance != null) {
+            return leaveProcessMapper.toDTO(historicInstance);
+        }
+        
+        return null;
+    }
+
+    /**
+     * 查询所有待办任务
+     * 
+     * @return 任务DTO列表
+     */
+    public List<TaskDTO> getAllTasks() {
+        List<Task> tasks = taskService.createTaskQuery()
+                .orderByTaskCreateTime()
+                .desc()
+                .list();
+        return LeaveTaskMapper.toDTOList(tasks);
     }
 }

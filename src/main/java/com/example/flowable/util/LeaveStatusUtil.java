@@ -13,13 +13,13 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 
 /**
- * 流程状态工具类
+ * 请假流程状态工具类
  * 用于获取流程的当前业务状态
  * 
  * @author Generated
  */
 @Component
-public class ProcessStatusUtil {
+public class LeaveStatusUtil {
     
     @Autowired
     private RuntimeService runtimeService;

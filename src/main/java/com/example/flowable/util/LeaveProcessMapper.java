@@ -11,15 +11,15 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * ProcessInstance到ProcessInstanceDTO的转换工具类
+ * ProcessInstance到ProcessInstanceDTO的转换工具类（请假流程专用）
  * 
  * @author Generated
  */
 @Component
-public class ProcessInstanceMapper {
+public class LeaveProcessMapper {
     
     @Autowired
-    private ProcessStatusUtil processStatusUtil;
+    private LeaveStatusUtil leaveStatusUtil;
     
     /**
      * 将单个ProcessInstance转换为ProcessInstanceDTO（包含状态信息）
@@ -47,7 +47,7 @@ public class ProcessInstanceMapper {
         dto.setDescription(processInstance.getDescription());
         
         // 填充状态信息
-        LeaveRequestStatus status = processStatusUtil.getProcessStatus(processInstance.getId());
+        LeaveRequestStatus status = leaveStatusUtil.getProcessStatus(processInstance.getId());
         dto.setStatus(status);
         dto.setStatusDisplayName(status.getDisplayName());
         
@@ -85,7 +85,7 @@ public class ProcessInstanceMapper {
         dto.setDescription(historicProcessInstance.getDescription());
         
         // 填充状态信息
-        LeaveRequestStatus status = processStatusUtil.getProcessStatus(historicProcessInstance.getId());
+        LeaveRequestStatus status = leaveStatusUtil.getProcessStatus(historicProcessInstance.getId());
         dto.setStatus(status);
         dto.setStatusDisplayName(status.getDisplayName());
         

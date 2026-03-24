@@ -1,16 +1,20 @@
 package com.example.flowable.controller;
 
 import com.example.flowable.model.LeaveRequestDTO;
+import com.example.flowable.model.ProcessInstanceDTO;
+import com.example.flowable.model.TaskDTO;
 import com.example.flowable.service.LeaveService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
  * 请假管理控制器
+ * 整合了请假申请、审批、流程查询和任务管理功能
  * 
  * @author Generated
  */
@@ -150,5 +154,31 @@ public class LeaveController {
         }
         
         return ResponseEntity.ok(taskInfo);
+    }
+
+    /**
+     * 查询流程实例（支持运行中和已结束的流程）
+     * 
+     * @param processInstanceId 流程实例ID
+     * @return 流程实例详情
+     */
+    @GetMapping("/process/instance/{processInstanceId}")
+    public ResponseEntity<ProcessInstanceDTO> getProcessInstanceById(@PathVariable String processInstanceId) {
+        ProcessInstanceDTO instanceDTO = leaveService.getProcessInstanceById(processInstanceId);
+        if (instanceDTO != null) {
+            return ResponseEntity.ok(instanceDTO);
+        }
+        return ResponseEntity.notFound().build();
+    }
+
+    /**
+     * 查询所有待办任务
+     * 
+     * @return 待办任务列表
+     */
+    @GetMapping("/task/list")
+    public ResponseEntity<List<TaskDTO>> getAllTasks() {
+        List<TaskDTO> tasks = leaveService.getAllTasks();
+        return ResponseEntity.ok(tasks);
     }
 }

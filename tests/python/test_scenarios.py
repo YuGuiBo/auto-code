@@ -132,7 +132,7 @@ class FlowableTestClient:
 
     def get_process_instance(self, process_id: str) -> Optional[Dict]:
         """查询流程实例"""
-        url = f"{self.base_url}/api/process/instance/{process_id}"
+        url = f"{self.base_url}/api/leave/process/instance/{process_id}"
         
         try:
             response = self.session.get(url)
@@ -153,7 +153,7 @@ class FlowableTestClient:
 
     def get_task_list(self) -> List[Dict]:
         """查询所有待办任务"""
-        url = f"{self.base_url}/api/task/list"
+        url = f"{self.base_url}/api/leave/task/list"
         
         try:
             response = self.session.get(url)

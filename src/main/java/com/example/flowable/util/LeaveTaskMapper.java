@@ -7,11 +7,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Task到TaskDTO的转换工具类
+ * Task到TaskDTO的转换工具类（请假流程专用）
  * 
  * @author Generated
  */
-public class TaskMapper {
+public class LeaveTaskMapper {
     
     /**
      * 将单个Task转换为TaskDTO
@@ -27,17 +27,17 @@ public class TaskMapper {
         TaskDTO dto = new TaskDTO();
         dto.setId(task.getId());
         dto.setName(task.getName());
-        dto.setTaskDefinitionKey(task.getTaskDefinitionKey());
-        dto.setAssignee(task.getAssignee());
-        dto.setProcessInstanceId(task.getProcessInstanceId());
-        dto.setExecutionId(task.getExecutionId());
-        dto.setProcessDefinitionId(task.getProcessDefinitionId());
-        dto.setCreateTime(task.getCreateTime());
         dto.setDescription(task.getDescription());
-        dto.setOwner(task.getOwner());
         dto.setPriority(task.getPriority());
+        dto.setAssignee(task.getAssignee());
+        dto.setOwner(task.getOwner());
+        dto.setProcessInstanceId(task.getProcessInstanceId());
+        dto.setProcessDefinitionId(task.getProcessDefinitionId());
+        dto.setTaskDefinitionKey(task.getTaskDefinitionKey());
+        dto.setCreateTime(task.getCreateTime());
         dto.setDueDate(task.getDueDate());
         dto.setCategory(task.getCategory());
+        dto.setExecutionId(task.getExecutionId());
         
         return dto;
     }
@@ -54,7 +54,7 @@ public class TaskMapper {
         }
         
         return tasks.stream()
-                .map(TaskMapper::toDTO)
+                .map(LeaveTaskMapper::toDTO)
                 .collect(Collectors.toList());
     }
 }
