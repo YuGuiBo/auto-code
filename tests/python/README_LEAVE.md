@@ -70,11 +70,17 @@ pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 ### 运行测试
 
-#### 1. 运行所有测试场景
+#### 1. 运行所有测试场景（推荐）
 
 ```bash
+# 直接运行（默认运行所有场景）
+python test_leave.py
+
+# 或显式指定运行所有场景
 python test_leave.py --all
 ```
+
+**💡 提示**：无参数时默认运行所有6个测试场景，使用更简单！
 
 #### 2. 运行单个场景
 
@@ -96,7 +102,10 @@ python test_leave.py --scenario 1 2 6
 #### 4. 指定服务器地址
 
 ```bash
-# 默认是http://localhost:8080
+# 使用默认行为（运行所有场景）
+python test_leave.py --url http://192.168.1.100:8080
+
+# 或显式指定
 python test_leave.py --all --url http://192.168.1.100:8080
 ```
 
@@ -182,9 +191,12 @@ python test_leave.py --help
 ### 在CI/CD中使用
 
 ```bash
-# 运行所有测试，返回退出码
-python test_leave.py --all
+# 运行所有测试，返回退出码（使用默认行为）
+python test_leave.py
 echo $?  # 0表示成功，非0表示失败
+
+# 或显式指定
+python test_leave.py --all
 ```
 
 ### 集成到测试套件

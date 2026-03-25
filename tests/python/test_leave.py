@@ -693,9 +693,8 @@ def main():
     print(f"{Color.CYAN}服务器地址: {args.url}{Color.RESET}\n")
     
     # 运行测试
-    if args.all:
-        client.run_all_scenarios()
-    elif args.scenario:
+    if args.scenario:
+        # 运行指定的场景
         for scenario_num in args.scenario:
             method_name = f"test_scenario_{scenario_num}"
             if hasattr(client, method_name):
@@ -705,8 +704,8 @@ def main():
         
         client.result.print_summary()
     else:
-        parser.print_help()
-        print(f"\n{Color.YELLOW}请使用 --all 运行所有场景，或使用 --scenario 指定场景编号{Color.RESET}\n")
+        # 默认运行所有场景（无参数或使用--all）
+        client.run_all_scenarios()
 
 
 if __name__ == "__main__":
