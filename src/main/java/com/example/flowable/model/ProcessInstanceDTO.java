@@ -1,6 +1,5 @@
 package com.example.flowable.model;
 
-import com.example.flowable.leave.enums.LeaveRequestStatus;
 import lombok.Data;
 import java.util.Date;
 
@@ -75,8 +74,9 @@ public class ProcessInstanceDTO {
     
     /**
      * 流程状态（业务状态）
+     * 使用Enum<?>类型以支持不同模块的状态枚举
      */
-    private LeaveRequestStatus status;
+    private Enum<?> status;
     
     /**
      * 状态显示名称（中文）
