@@ -73,37 +73,37 @@ pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 #### 1. 运行所有测试场景
 
 ```bash
-python test_scenarios.py --all
+python test_leave.py --all
 ```
 
 #### 2. 运行单个场景
 
 ```bash
 # 运行场景1
-python test_scenarios.py --scenario 1
+python test_leave.py --scenario 1
 
 # 运行场景6
-python test_scenarios.py --scenario 6
+python test_leave.py --scenario 6
 ```
 
 #### 3. 运行多个场景
 
 ```bash
 # 运行场景1、2和6
-python test_scenarios.py --scenario 1 2 6
+python test_leave.py --scenario 1 2 6
 ```
 
 #### 4. 指定服务器地址
 
 ```bash
 # 默认是http://localhost:8080
-python test_scenarios.py --all --url http://192.168.1.100:8080
+python test_leave.py --all --url http://192.168.1.100:8080
 ```
 
 ### 查看帮助
 
 ```bash
-python test_scenarios.py --help
+python test_leave.py --help
 ```
 
 ## 📊 输出示例
@@ -183,14 +183,14 @@ python test_scenarios.py --help
 
 ```bash
 # 运行所有测试，返回退出码
-python test_scenarios.py --all
+python test_leave.py --all
 echo $?  # 0表示成功，非0表示失败
 ```
 
 ### 集成到测试套件
 
 ```python
-from test_scenarios import FlowableTestClient
+from test_leave import FlowableTestClient
 
 # 创建客户端
 client = FlowableTestClient("http://localhost:8080")

@@ -650,16 +650,16 @@ def main():
         epilog='''
 使用示例:
   # 运行所有测试场景
-  python test_scenarios.py --all
+  python test_leave.py --all
   
   # 运行单个场景
-  python test_scenarios.py --scenario 1
+  python test_leave.py --scenario 1
   
   # 运行多个场景
-  python test_scenarios.py --scenario 1 2 6
+  python test_leave.py --scenario 1 2 6
   
   # 指定服务器地址
-  python test_scenarios.py --all --url http://localhost:8080
+  python test_leave.py --all --url http://localhost:8080
         '''
     )
     
