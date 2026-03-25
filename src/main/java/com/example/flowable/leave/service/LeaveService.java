@@ -1,11 +1,11 @@
-package com.example.flowable.service;
+package com.example.flowable.leave.service;
 
-import com.example.flowable.enums.LeaveRequestStatus;
-import com.example.flowable.model.LeaveRequestDTO;
+import com.example.flowable.leave.enums.LeaveRequestStatus;
+import com.example.flowable.leave.model.LeaveRequestDTO;
 import com.example.flowable.model.ProcessInstanceDTO;
 import com.example.flowable.model.TaskDTO;
-import com.example.flowable.util.LeaveProcessMapper;
-import com.example.flowable.util.LeaveTaskMapper;
+import com.example.flowable.common.util.ProcessMapper;
+import com.example.flowable.common.util.TaskMapper;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
@@ -22,6 +22,7 @@ import java.util.Map;
 /**
  * 请假服务类
  * 整合了请假业务逻辑、流程查询和任务管理功能
+ * 使用通用工具类进行数据转换，业务状态由本服务自己管理
  * 
  * @author Generated
  */
@@ -36,9 +37,6 @@ public class LeaveService {
 
     @Autowired
     private HistoryService historyService;
-
-    @Autowired
-    private LeaveProcessMapper leaveProcessMapper;
 
     /**
      * 申请请假
@@ -199,7 +197,13 @@ public class LeaveService {
                 .singleResult();
         
         if (instance != null) {
-            return leaveProcessMapper.toDTO(instance);
+            // 使用通用工具类转换
+            ProcessInstanceDTO dto = ProcessMapper.toDTO(instance);
+            // 填充请假业务特有的状态信息
+            LeaveRequestStatus status = getLeaveStatus(processInstanceId);
+            dto.setStatus(status);
+            dto.setStatusDisplayName(status.getDisplayName());
+            return dto;
         }
         
         // 如果运行中的流程不存在，查询历史流程
@@ -209,7 +213,13 @@ public class LeaveService {
                 .singleResult();
         
         if (historicInstance != null) {
-            return leaveProcessMapper.toDTO(historicInstance);
+            // 使用通用工具类转换
+            ProcessInstanceDTO dto = ProcessMapper.toDTO(historicInstance);
+            // 填充请假业务特有的状态信息
+            LeaveRequestStatus status = getLeaveStatus(processInstanceId);
+            dto.setStatus(status);
+            dto.setStatusDisplayName(status.getDisplayName());
+            return dto;
         }
         
         return null;
@@ -225,6 +235,57 @@ public class LeaveService {
                 .orderByTaskCreateTime()
                 .desc()
                 .list();
-        return LeaveTaskMapper.toDTOList(tasks);
+        // 使用通用工具类转换
+        return TaskMapper.toDTOList(tasks);
+    }
+
+    /**
+     * 获取请假流程的业务状态
+     * 从流程变量的 status 字段读取
+     * 
+     * @param processInstanceId 流程实例ID
+     * @return 请假状态枚举
+     */
+    private LeaveRequestStatus getLeaveStatus(String processInstanceId) {
+        // 尝试从运行中的流程获取
+        ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .singleResult();
+        
+        if (processInstance != null) {
+            Map<String, Object> variables = runtimeService.getVariables(processInstanceId);
+            if (variables.containsKey("status")) {
+                String statusStr = (String) variables.get("status");
+                try {
+                    return LeaveRequestStatus.valueOf(statusStr);
+                } catch (IllegalArgumentException e) {
+                    return LeaveRequestStatus.SUBMITTED;
+                }
+            }
+            return LeaveRequestStatus.SUBMITTED;
+        }
+        
+        // 从历史流程获取
+        Map<String, Object> variables = historyService
+                .createHistoricVariableInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .list()
+                .stream()
+                .filter(v -> v.getValue() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                        v -> v.getVariableName(),
+                        v -> v.getValue()
+                ));
+        
+        if (variables.containsKey("status")) {
+            String statusStr = (String) variables.get("status");
+            try {
+                return LeaveRequestStatus.valueOf(statusStr);
+            } catch (IllegalArgumentException e) {
+                return LeaveRequestStatus.SUBMITTED;
+            }
+        }
+        
+        return LeaveRequestStatus.SUBMITTED;
     }
 }

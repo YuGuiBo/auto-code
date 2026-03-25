@@ -1,4 +1,4 @@
-package com.example.flowable.model;
+package com.example.flowable.leave.model;
 
 import lombok.Data;
 import java.time.LocalDate;

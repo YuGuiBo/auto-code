@@ -1,4 +1,4 @@
-package com.example.flowable.util;
+package com.example.flowable.common.util;
 
 import com.example.flowable.model.TaskDTO;
 import org.flowable.task.api.Task;
@@ -7,11 +7,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Task到TaskDTO的转换工具类（请假流程专用）
+ * 任务转换工具类（通用，所有流程共用）
  * 
  * @author Generated
  */
-public class LeaveTaskMapper {
+public class TaskMapper {
     
     /**
      * 将单个Task转换为TaskDTO
@@ -54,7 +54,7 @@ public class LeaveTaskMapper {
         }
         
         return tasks.stream()
-                .map(LeaveTaskMapper::toDTO)
+                .map(TaskMapper::toDTO)
                 .collect(Collectors.toList());
     }
 }

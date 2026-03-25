@@ -1,33 +1,25 @@
-package com.example.flowable.util;
+package com.example.flowable.common.util;
 
-import com.example.flowable.enums.LeaveRequestStatus;
 import com.example.flowable.model.ProcessInstanceDTO;
 import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.runtime.ProcessInstance;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 /**
- * ProcessInstance到ProcessInstanceDTO的转换工具类（请假流程专用）
+ * 流程实例转换工具类（通用，所有流程共用）
+ * 只做基础字段映射，不填充业务状态
+ * 业务状态由各个业务Service自己填充
  * 
  * @author Generated
  */
-@Component
-public class LeaveProcessMapper {
-    
-    @Autowired
-    private LeaveStatusUtil leaveStatusUtil;
+public class ProcessMapper {
     
     /**
-     * 将单个ProcessInstance转换为ProcessInstanceDTO（包含状态信息）
+     * 将运行中的ProcessInstance转换为ProcessInstanceDTO
      * 
      * @param processInstance Flowable流程实例对象
      * @return ProcessInstanceDTO
      */
-    public ProcessInstanceDTO toDTO(ProcessInstance processInstance) {
+    public static ProcessInstanceDTO toDTO(ProcessInstance processInstance) {
         if (processInstance == null) {
             return null;
         }
@@ -46,26 +38,24 @@ public class LeaveProcessMapper {
         dto.setName(processInstance.getName());
         dto.setDescription(processInstance.getDescription());
         
-        // 填充状态信息
-        LeaveRequestStatus status = leaveStatusUtil.getProcessStatus(processInstance.getId());
-        dto.setStatus(status);
-        dto.setStatusDisplayName(status.getDisplayName());
-        
         // 流程还在运行中，未结束
         dto.setEnded(false);
         dto.setEndTime(null);
         dto.setEndReason(null);
         
+        // 注意：不填充 status 和 statusDisplayName
+        // 这些业务字段由调用方（业务Service）自己填充
+        
         return dto;
     }
     
     /**
-     * 将历史流程实例转换为ProcessInstanceDTO（包含状态信息）
+     * 将历史流程实例转换为ProcessInstanceDTO
      * 
      * @param historicProcessInstance 历史流程实例对象
      * @return ProcessInstanceDTO
      */
-    public ProcessInstanceDTO toDTO(HistoricProcessInstance historicProcessInstance) {
+    public static ProcessInstanceDTO toDTO(HistoricProcessInstance historicProcessInstance) {
         if (historicProcessInstance == null) {
             return null;
         }
@@ -84,48 +74,14 @@ public class LeaveProcessMapper {
         dto.setName(historicProcessInstance.getName());
         dto.setDescription(historicProcessInstance.getDescription());
         
-        // 填充状态信息
-        LeaveRequestStatus status = leaveStatusUtil.getProcessStatus(historicProcessInstance.getId());
-        dto.setStatus(status);
-        dto.setStatusDisplayName(status.getDisplayName());
-        
         // 填充结束信息
         dto.setEnded(historicProcessInstance.getEndTime() != null);
         dto.setEndTime(historicProcessInstance.getEndTime());
         dto.setEndReason(historicProcessInstance.getDeleteReason());
         
+        // 注意：不填充 status 和 statusDisplayName
+        // 这些业务字段由调用方（业务Service）自己填充
+        
         return dto;
-    }
-    
-    /**
-     * 将ProcessInstance列表转换为ProcessInstanceDTO列表
-     * 
-     * @param processInstances Flowable流程实例列表
-     * @return ProcessInstanceDTO列表
-     */
-    public List<ProcessInstanceDTO> toDTOList(List<ProcessInstance> processInstances) {
-        if (processInstances == null) {
-            return null;
-        }
-        
-        return processInstances.stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
-    }
-    
-    /**
-     * 将历史流程实例列表转换为ProcessInstanceDTO列表
-     * 
-     * @param historicProcessInstances 历史流程实例列表
-     * @return ProcessInstanceDTO列表
-     */
-    public List<ProcessInstanceDTO> toDTOListFromHistoric(List<HistoricProcessInstance> historicProcessInstances) {
-        if (historicProcessInstances == null) {
-            return null;
-        }
-        
-        return historicProcessInstances.stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
     }
 }

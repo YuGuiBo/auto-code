@@ -1,6 +1,6 @@
 package com.example.flowable.model;
 
-import com.example.flowable.enums.LeaveRequestStatus;
+import com.example.flowable.leave.enums.LeaveRequestStatus;
 import lombok.Data;
 import java.util.Date;
 

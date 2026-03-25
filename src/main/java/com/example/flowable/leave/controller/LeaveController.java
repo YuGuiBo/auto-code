@@ -1,9 +1,9 @@
-package com.example.flowable.controller;
+package com.example.flowable.leave.controller;
 
-import com.example.flowable.model.LeaveRequestDTO;
+import com.example.flowable.leave.model.LeaveRequestDTO;
 import com.example.flowable.model.ProcessInstanceDTO;
 import com.example.flowable.model.TaskDTO;
-import com.example.flowable.service.LeaveService;
+import com.example.flowable.leave.service.LeaveService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
