@@ -1,0 +1,70 @@
+process:
+  key: overtimeProcess
+  name: 加班申请流程
+  apiPrefix: /api/overtime
+  version: 1.0.0
+  description: 加班申请审批流程
+
+statuses:
+  SUBMITTED:
+    displayName: 已提交
+    description: 加班申请已提交
+  PENDING_MANAGER_APPROVAL:
+    displayName: 待经理审批
+    description: 等待经理审批
+  PENDING_DEPT_MANAGER_APPROVAL:
+    displayName: 待部门经理审批
+    description: 等待部门经理审批
+  PENDING_HR_CONFIRMATION:
+    displayName: 待HR确认
+    description: 等待HR确认
+  APPROVED:
+    displayName: 已批准
+    description: 加班申请已批准
+  REJECTED:
+    displayName: 已拒绝
+    description: 加班申请已被拒绝
+
+tasks:
+  # 直接经理审批
+  - taskName: 直接经理审批
+    taskKey: managerApproval
+    approvalType: manager
+    variables:
+      approvalResult: managerApproved
+      commentField: comment
+    statusMapping:
+      approved: PENDING_MANAGER_APPROVAL  # 保持当前状态，让BPMN网关决定下一步
+      rejected: REJECTED
+  
+  # 部门经理审批
+  - taskName: 部门经理审批
+    taskKey: deptManagerApproval
+    approvalType: dept-manager
+    variables:
+      approvalResult: deptManagerApproved
+      commentField: comment
+    statusMapping:
+      approved: PENDING_DEPT_MANAGER_APPROVAL  # 保持当前状态
+      rejected: REJECTED
+  
+  # HR确认
+  - taskName: HR确认
+    taskKey: hrConfirmation
+    approvalType: hr
+    variables:
+      approvalResult: hrApproved
+      commentField: comment
+    statusMapping:
+      approved: APPROVED
+      rejected: REJECTED
+
+initialization:
+  defaultStatus: PENDING_MANAGER_APPROVAL
+  businessRules: []
+
+requiredFields:
+  - applicantName
+  - overtimeDate
+  - hours
+  - reason

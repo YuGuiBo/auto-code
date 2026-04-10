@@ -74,9 +74,9 @@ public class ProcessInstanceDTO {
     
     /**
      * 流程状态（业务状态）
-     * 使用Enum<?>类型以支持不同模块的状态枚举
+     * 低代码架构：使用Object类型，支持枚举或字符串
      */
-    private Enum<?> status;
+    private Object status;
     
     /**
      * 状态显示名称（中文）

@@ -1,0 +1,74 @@
+process:
+  key: leaveRequestProcess
+  name: 员工请假流程
+  apiPrefix: /api/leave
+  version: 1.0.0
+  description: 支持多级审批的请假流程，根据请假天数和剩余假期自动路由
+
+statuses:
+  SUBMITTED:
+    displayName: 已提交
+    description: 请假申请已提交，等待处理
+  INSUFFICIENT_LEAVE:
+    displayName: 假期不足
+    description: 剩余假期不足，申请已自动拒绝
+  PENDING_MANAGER_APPROVAL:
+    displayName: 待直接经理审批
+    description: 等待直接经理审批
+  PENDING_DEPT_MANAGER_APPROVAL:
+    displayName: 待部门经理审批
+    description: 等待部门经理审批
+  APPROVED:
+    displayName: 已批准
+    description: 请假申请已批准
+  REJECTED:
+    displayName: 已拒绝
+    description: 请假申请已被拒绝
+
+tasks:
+  # 短期请假的直接经理审批（<= 3天）
+  - taskName: 直接经理审批
+    taskKey: managerApprovalTask
+    approvalType: manager
+    variables:
+      approvalResult: approved
+      commentField: managerComment
+    statusMapping:
+      approved: APPROVED
+      rejected: REJECTED
+  
+  # 长期请假的直接经理初审（> 3天）
+  - taskName: 直接经理初审
+    taskKey: managerFirstApprovalTask
+    approvalType: manager
+    variables:
+      approvalResult: managerApproved
+      commentField: managerComment
+    statusMapping:
+      approved: PENDING_DEPT_MANAGER_APPROVAL
+      rejected: REJECTED
+  
+  # 部门经理审批（仅长期请假）
+  - taskName: 部门经理审批
+    taskKey: departmentManagerApprovalTask
+    approvalType: dept-manager
+    variables:
+      approvalResult: deptManagerApproved
+      commentField: deptManagerComment
+    statusMapping:
+      approved: APPROVED
+      rejected: REJECTED
+
+initialization:
+  defaultStatus: PENDING_MANAGER_APPROVAL
+  businessRules:
+    # 业务规则：剩余假期不足，自动拒绝
+    - condition: "#leaveDays > #remainingDays"
+      status: INSUFFICIENT_LEAVE
+      stopProcess: true
+
+requiredFields:
+  - applicantName
+  - leaveDays
+  - remainingDays
+  - reason

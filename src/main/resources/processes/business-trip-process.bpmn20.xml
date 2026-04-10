@@ -18,10 +18,18 @@
         <exclusiveGateway id="daysGateway" name="天数判断"/>
         
         <!-- 部门经理审批（仅长期出差） -->
-        <userTask id="deptManagerApproval" name="部门经理审批" flowable:assignee="deptManager"/>
+        <userTask id="deptManagerApproval" name="部门经理审批" flowable:assignee="deptManager">
+            <extensionElements>
+                <flowable:executionListener event="start" expression="${execution.setVariable('status', 'PENDING_DEPT_MANAGER_APPROVAL')}"/>
+            </extensionElements>
+        </userTask>
         
         <!-- 行政审批 -->
-        <userTask id="adminApproval" name="行政审批" flowable:assignee="admin"/>
+        <userTask id="adminApproval" name="行政审批" flowable:assignee="admin">
+            <extensionElements>
+                <flowable:executionListener event="start" expression="${execution.setVariable('status', 'PENDING_ADMIN_APPROVAL')}"/>
+            </extensionElements>
+        </userTask>
         
         <!-- 结束事件 -->
         <endEvent id="endEvent" name="结束"/>
