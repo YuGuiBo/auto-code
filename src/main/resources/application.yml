@@ -51,12 +51,24 @@ server:
 logging:
   level:
     root: INFO
-    org.flowable: DEBUG
+    # Flowable框架日志 - 只显示警告和错误
+    org.flowable: WARN
+    org.flowable.engine.impl.persistence.entity: WARN
+    # Spring框架日志
     org.springframework.web: INFO
-    org.hibernate: INFO
-    com.example.flowable: DEBUG
+    org.springframework.jdbc: WARN
+    # Hibernate日志 - 关闭SQL日志
+    org.hibernate: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    # 应用日志 - 只显示重要信息
+    com.example.flowable: INFO
+    # 特定包可以开启DEBUG（按需调整）
+    # com.example.flowable.dynamic.service.BusinessRuleEngine: DEBUG
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
   file:
     name: logs/auto-code.log
+    max-size: 10MB
+    max-history: 7

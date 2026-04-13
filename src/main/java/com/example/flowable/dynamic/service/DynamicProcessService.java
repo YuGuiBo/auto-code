@@ -60,63 +60,35 @@ public class DynamicProcessService {
         String initialStatus = initConfig.getDefaultStatus();
         boolean shouldStopProcess = false;
         
-        log.info("🔍 开始评估业务规则 - 流程: {}", processKey);
-        log.info("📦 请求变量: {}", variables);
-        log.info("📌 默认状态: {}", initialStatus);
+        // 只在DEBUG级别输出详细信息
+        if (log.isDebugEnabled()) {
+            log.debug("评估业务规则 - 流程: {}, 变量: {}", processKey, variables);
+        }
         
-        if (initConfig == null) {
-            log.warn("⚠️ 初始化配置为空");
-        } else if (initConfig.getBusinessRules() == null) {
-            log.warn("⚠️ 业务规则列表为空（null）");
-        } else if (initConfig.getBusinessRules().isEmpty()) {
-            log.info("ℹ️ 没有配置业务规则");
-        } else {
-            log.info("📋 业务规则数量: {}", initConfig.getBusinessRules().size());
-            
-            // 打印每条规则
-            for (int i = 0; i < initConfig.getBusinessRules().size(); i++) {
-                BusinessRule rule = initConfig.getBusinessRules().get(i);
-                log.info("   规则[{}]: condition='{}', status='{}', stopProcess='{}'", 
-                    i, rule.getCondition(), rule.getStatus(), rule.getStopProcess());
-            }
-            
+        if (initConfig != null && initConfig.getBusinessRules() != null && !initConfig.getBusinessRules().isEmpty()) {
             BusinessRule matchedRule = ruleEngine.evaluateRules(
-                initConfig.getBusinessRules(), 
+                initConfig.getBusinessRules(),
                 variables
             );
             
             if (matchedRule != null) {
-                log.info("✅ 匹配到业务规则 - 条件: {}, 状态: {}, stopProcess: {}", 
-                    matchedRule.getCondition(), matchedRule.getStatus(), matchedRule.getStopProcess());
                 initialStatus = matchedRule.getStatus();
                 shouldStopProcess = Boolean.TRUE.equals(matchedRule.getStopProcess());
-            } else {
-                log.warn("⚠️ 没有匹配到任何业务规则");
+                log.info("业务规则匹配 - 流程: {}, 状态: {}", processKey, initialStatus);
             }
         }
-        
-        log.info("🎯 最终状态: {}, shouldStopProcess: {}", initialStatus, shouldStopProcess);
         
         // 设置初始状态
         variables.put("status", initialStatus);
         
-        // 4. 启动流程（即使业务规则匹配，仍然启动流程，让BPMN网关处理路由）
-        // 这样可以确保：
-        // - 有流程实例ID可以查询
-        // - 有完整的审计日志
-        // - BPMN流程定义中的网关会根据变量自动路由到正确的结束事件
-        if (shouldStopProcess) {
-            log.info("⚠️ 业务规则匹配，但仍启动流程以记录审计。BPMN网关将处理路由: {} -> 状态: {}", processKey, initialStatus);
-        }
-        
-        // 5. 启动流程
+        // 4. 启动流程
         String processInstanceId = processEngineService.startProcess(
             processKey,
             null,
             variables
         );
         
-        log.info("✅ 流程已启动: {} - 实例ID: {}", config.getProcess().getName(), processInstanceId);
+        log.info("流程已启动 - {}: {}", config.getProcess().getName(), processInstanceId);
         
         // 6. 返回响应
         Map<String, Object> response = new HashMap<>();
@@ -172,7 +144,7 @@ public class DynamicProcessService {
         // 5. 完成任务
         taskEngineService.completeTask(taskId, variables);
         
-        log.info("✅ 任务审批完成: {} - 结果: {}", task.getName(), approved ? "批准" : "拒绝");
+        log.info("任务审批完成 - {}: {}", task.getName(), approved ? "批准" : "拒绝");
         
         // 6. 返回响应
         Map<String, Object> response = new HashMap<>();

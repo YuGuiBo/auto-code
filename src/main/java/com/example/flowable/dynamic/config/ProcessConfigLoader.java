@@ -30,9 +30,8 @@ public class ProcessConfigLoader implements ApplicationRunner {
     
     @Override
     public void run(ApplicationArguments args) throws Exception {
-        log.info("开始加载流程配置文件...");
         loadAllConfigs();
-        log.info("流程配置加载完成，共加载 {} 个流程", processConfigs.size());
+        log.info("流程配置加载完成，共 {} 个流程", processConfigs.size());
     }
     
     /**
@@ -48,24 +47,26 @@ public class ProcessConfigLoader implements ApplicationRunner {
             for (Resource resource : resources) {
                 try {
                     ProcessConfig config = yamlMapper.readValue(
-                        resource.getInputStream(), 
+                        resource.getInputStream(),
                         ProcessConfig.class
                     );
                     
                     String processKey = config.getProcess().getKey();
                     processConfigs.put(processKey, config);
                     
-                    log.info("✅ 加载配置: {} - {}", 
-                        config.getProcess().getName(), 
-                        config.getProcess().getApiPrefix());
+                    if (log.isDebugEnabled()) {
+                        log.debug("加载配置: {} - {}",
+                            config.getProcess().getName(),
+                            config.getProcess().getApiPrefix());
+                    }
                     
                 } catch (IOException e) {
-                    log.error("❌ 加载配置文件失败: {}", resource.getFilename(), e);
+                    log.error("加载配置文件失败: {}", resource.getFilename(), e);
                 }
             }
             
         } catch (IOException e) {
-            log.error("❌ 扫描配置目录失败", e);
+            log.error("扫描配置目录失败", e);
         }
     }
     
@@ -73,9 +74,9 @@ public class ProcessConfigLoader implements ApplicationRunner {
      * 重新加载所有配置（用于热更新）
      */
     public synchronized void reloadConfigs() {
-        log.info("🔄 重新加载流程配置...");
+        log.info("重新加载流程配置...");
         loadAllConfigs();
-        log.info("✅ 流程配置重新加载完成");
+        log.info("流程配置重新加载完成");
     }
     
     /**
