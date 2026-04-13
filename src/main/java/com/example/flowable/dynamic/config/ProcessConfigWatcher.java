@@ -30,8 +30,8 @@ public class ProcessConfigWatcher {
     @PostConstruct
     public void init() {
         try {
-            // 获取配置目录路径
-            Path configPath = Paths.get("src/main/resources/process-configs");
+            // 获取配置目录路径（现在配置文件在processes目录及其子目录中）
+            Path configPath = Paths.get("src/main/resources/processes");
             
             // 如果是打包后的环境，尝试使用 classpath
             if (!Files.exists(configPath)) {
@@ -42,10 +42,9 @@ public class ProcessConfigWatcher {
             
             // 创建监听服务
             watchService = FileSystems.getDefault().newWatchService();
-            configPath.register(watchService,
-                StandardWatchEventKinds.ENTRY_CREATE,
-                StandardWatchEventKinds.ENTRY_MODIFY,
-                StandardWatchEventKinds.ENTRY_DELETE);
+            
+            // 递归注册所有子目录
+            registerRecursive(configPath);
             
             // 启动监听线程
             startWatching();
@@ -54,6 +53,32 @@ public class ProcessConfigWatcher {
             
         } catch (IOException e) {
             log.error("❌ 启动配置文件监听失败", e);
+        }
+    }
+    
+    /**
+     * 递归注册目录及其所有子目录
+     */
+    private void registerRecursive(Path path) throws IOException {
+        // 注册当前目录
+        path.register(watchService,
+            StandardWatchEventKinds.ENTRY_CREATE,
+            StandardWatchEventKinds.ENTRY_MODIFY,
+            StandardWatchEventKinds.ENTRY_DELETE);
+        
+        // 递归注册所有子目录
+        try (var stream = Files.walk(path, 10)) {
+            stream.filter(Files::isDirectory)
+                  .forEach(dir -> {
+                      try {
+                          dir.register(watchService,
+                              StandardWatchEventKinds.ENTRY_CREATE,
+                              StandardWatchEventKinds.ENTRY_MODIFY,
+                              StandardWatchEventKinds.ENTRY_DELETE);
+                      } catch (IOException e) {
+                          log.error("❌ 注册监听目录失败: {}", dir, e);
+                      }
+                  });
         }
     }
     

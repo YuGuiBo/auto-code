@@ -42,8 +42,8 @@ public class ProcessConfigLoader implements ApplicationRunner {
         processConfigs.clear();
         
         try {
-            // 查找所有 *-config.yml 文件
-            Resource[] resources = resolver.getResources("classpath:process-configs/*-config.yml");
+            // 查找所有 *-config.yml 文件（支持子目录递归扫描）
+            Resource[] resources = resolver.getResources("classpath:processes/**/*-config.yml");
             
             for (Resource resource : resources) {
                 try {
