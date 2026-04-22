@@ -1,4 +1,4 @@
-spring:
+﻿spring:
   application:
     name: auto-code
   
@@ -25,9 +25,12 @@ spring:
 
 # Flowable配置
 flowable:
-  # 自动部署processes目录下的流程文件
-  process-definition-location-prefix: classpath*:/processes/
-  process-definition-location-suffixes: "**.bpmn20.xml,**.bpmn"
+  # 🔄 禁用自动文件扫描（改为从数据库加载）
+  # process-definition-location-prefix: classpath*:/processes/
+  # process-definition-location-suffixes: "**.bpmn20.xml,**.bpmn"
+  
+  # ✅ 禁用自动部署，改为手动部署
+  check-process-definitions: false
   
   # 数据库配置
   database-schema-update: true
@@ -37,9 +40,13 @@ flowable:
   
   # 历史记录级别（full: 记录所有历史信息）
   history-level: full
-  
-  # 是否检查流程定义
-  check-process-definitions: true
+
+# 🆕 应用配置
+app:
+  process:
+    migration:
+      # 数据迁移开关：首次启动时启用，迁移完成后可以设为false
+      enabled: false
 
 # 服务器配置
 server:
