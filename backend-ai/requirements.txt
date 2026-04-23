@@ -1,0 +1,22 @@
+# FastAPI核心
+fastapi==0.115.0
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+
+# 数据库（使用psycopg3，纯Python实现，无需编译）
+psycopg[binary]==3.3.3
+sqlalchemy==2.0.36
+
+# AI服务客户端
+openai==1.59.7
+httpx==0.28.1
+
+# 数据验证（使用最新版本，有Python 3.13的预编译wheel）
+pydantic==2.10.6
+pydantic-settings==2.7.1
+
+# CORS
+python-dotenv==1.0.1
+
+# 工具
+python-dateutil==2.9.0
