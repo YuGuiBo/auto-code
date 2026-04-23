@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-gray-200;
+  }
+  
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+}
+
+@layer utilities {
+  .glass-effect {
+    @apply bg-white/80 backdrop-blur-apple;
+  }
+  
+  .card-apple {
+    @apply bg-white rounded-apple shadow-apple;
+  }
+  
+  .card-apple-hover {
+    @apply transition-all duration-300 hover:shadow-apple-lg hover:-translate-y-0.5;
+  }
+}
+
+/* Made with Bob */
