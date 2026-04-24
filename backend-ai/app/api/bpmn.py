@@ -364,4 +364,56 @@ async def update_stage(
     
     return {"process_id": process_id, "stage": stage, "message": "阶段更新成功"}
 
+@router.post("/process/{process_id}/generate")
+async def generate_bpmn(
+    process_id: int,
+    db: Session = Depends(get_db)
+):
+    """根据用户用例生成BPMN流程定义"""
+    process = db.query(Process).filter(Process.id == process_id).first()
+    if not process:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"流程ID {process_id} 不存在"
+        )
+    
+    if not process.user_cases:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="用户用例为空，无法生成BPMN"
+        )
+    
+    try:
+        # 调用AI服务生成BPMN
+        bpmn_xml = await ai_service.generate_bpmn(
+            process.name,
+            process.user_cases,
+            process.structured_requirements
+        )
+        
+        # 更新流程
+        process.bpmn_xml = bpmn_xml
+        process.current_stage = "design"
+        db.commit()
+        db.refresh(process)
+        
+        # 保存到artifact
+        artifact = Artifact(
+            process_id=process_id,
+            artifact_type="bpmn_draft",
+            content={"bpmn_xml": bpmn_xml},
+            meta_data={"generated_at": datetime.now().isoformat()},
+            created_by="system"
+        )
+        db.add(artifact)
+        db.commit()
+        
+        return {"bpmn_xml": bpmn_xml, "message": "BPMN生成成功"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"生成BPMN时发生错误: {str(e)}"
+        )
+
+
 # Made with Bob

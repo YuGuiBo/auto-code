@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { FC, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useChatStore } from '../stores/chatStore';
 import {
   DocumentTextIcon,
@@ -7,12 +8,14 @@ import {
   CheckIcon,
   XMarkIcon,
   SparklesIcon,
+  ArrowRightIcon,
 } from '@heroicons/react/24/outline';
 import StructuredRequirementsView from '../components/Requirements/StructuredRequirementsView';
 import EditableRequirementsView from '../components/Requirements/EditableRequirementsView';
 import { StructuredRequirements } from '../services/api';
 
 export const RequirementsPage: FC = () => {
+  const navigate = useNavigate();
   const {
     structuredRequirements,
     isGenerating,
@@ -97,15 +100,26 @@ export const RequirementsPage: FC = () => {
             )}
 
             {structuredRequirements && !isEditMode && (
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleEnterEditMode}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors shadow-md"
-              >
-                <PencilIcon className="w-4 h-4" />
-                编辑文档
-              </motion.button>
+              <>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleEnterEditMode}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors shadow-md"
+                >
+                  <PencilIcon className="w-4 h-4" />
+                  编辑文档
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => navigate('/cases')}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-purple-500/30"
+                >
+                  <span>前往用户用例</span>
+                  <ArrowRightIcon className="w-4 h-4" />
+                </motion.button>
+              </>
             )}
 
             {isEditMode && (

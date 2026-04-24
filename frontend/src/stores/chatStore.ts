@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Message } from '../components/Chat';
-import { bpmnApi, AnalysisMatrix, StructuredRequirements } from '../services/api';
+import { bpmnApi, AnalysisMatrix, StructuredRequirements, UserCase } from '../services/api';
 
 interface ChatState {
   messages: Message[];
@@ -10,6 +10,7 @@ interface ChatState {
   currentProcessId: string | null;
   analysisMatrix: AnalysisMatrix | null;
   structuredRequirements: StructuredRequirements | null;
+  userCases: UserCase[] | null;
   error: string | null;
   saveSuccess: boolean;
 
@@ -22,6 +23,9 @@ interface ChatState {
   setStructuredRequirements: (requirements: StructuredRequirements) => void;
   generateRequirements: () => Promise<void>;
   updateRequirements: (requirements: StructuredRequirements) => Promise<void>;
+  setUserCases: (cases: UserCase[]) => void;
+  generateUserCases: () => Promise<void>;
+  updateUserCases: (cases: UserCase[]) => Promise<void>;
   setError: (error: string | null) => void;
   setSaveSuccess: (success: boolean) => void;
 }
@@ -34,6 +38,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   currentProcessId: null,
   analysisMatrix: null,
   structuredRequirements: null,
+  userCases: null,
   error: null,
   saveSuccess: false,
 
@@ -219,6 +224,85 @@ export const useChatStore = create<ChatState>((set, get) => ({
         errorMessage = typeof error.response.data.detail === 'string'
           ? error.response.data.detail
           : '保存需求文档失败';
+      }
+      
+      set({
+        error: errorMessage,
+        isSaving: false,
+        saveSuccess: false,
+      });
+    }
+  },
+
+  setUserCases: (cases: UserCase[]) => {
+    set({ userCases: cases });
+  },
+
+  generateUserCases: async () => {
+    const { currentProcessId } = get();
+    
+    if (!currentProcessId) {
+      set({ error: '没有活动的流程ID' });
+      return;
+    }
+
+    set({ isGenerating: true, error: null });
+
+    try {
+      const response = await bpmnApi.generateUserCases(currentProcessId);
+      console.log('Generate user cases response:', response);
+      // 后端返回的是ProcessResponse，user_cases在response.user_cases中
+      set({
+        userCases: response.user_cases || [],
+        isGenerating: false,
+      });
+    } catch (error: any) {
+      console.error('Failed to generate user cases:', error);
+      
+      let errorMessage = '生成用户用例失败，请稍后重试。';
+      if (error.response?.data?.detail) {
+        errorMessage = typeof error.response.data.detail === 'string'
+          ? error.response.data.detail
+          : '生成用户用例失败';
+      }
+      
+      set({
+        error: errorMessage,
+        isGenerating: false,
+      });
+    }
+  },
+
+  updateUserCases: async (cases: UserCase[]) => {
+    const { currentProcessId } = get();
+    
+    if (!currentProcessId) {
+      set({ error: '没有活动的流程ID' });
+      return;
+    }
+
+    set({ isSaving: true, error: null, saveSuccess: false });
+
+    try {
+      await bpmnApi.updateUserCases(currentProcessId, cases);
+      set({
+        userCases: cases,
+        isSaving: false,
+        saveSuccess: true,
+      });
+
+      // Reset success message after 3 seconds
+      setTimeout(() => {
+        set({ saveSuccess: false });
+      }, 3000);
+    } catch (error: any) {
+      console.error('Failed to update user cases:', error);
+      
+      let errorMessage = '保存用户用例失败，请稍后重试。';
+      if (error.response?.data?.detail) {
+        errorMessage = typeof error.response.data.detail === 'string'
+          ? error.response.data.detail
+          : '保存用户用例失败';
       }
       
       set({

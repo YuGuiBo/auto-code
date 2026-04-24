@@ -4,6 +4,8 @@ import LoginPage from './pages/LoginPage'
 import HomePage from './pages/HomePage'
 import { ProcessDesignPage } from './pages/ProcessDesignPage'
 import { RequirementsPage } from './pages/RequirementsPage'
+import { UserCasesPage } from './pages/UserCasesPage'
+import { BPMNPage } from './pages/BPMNPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
@@ -36,6 +38,22 @@ function App() {
           element={
             <PrivateRoute>
               <RequirementsPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/cases"
+          element={
+            <PrivateRoute>
+              <UserCasesPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/bpmn"
+          element={
+            <PrivateRoute>
+              <BPMNPage />
             </PrivateRoute>
           }
         />

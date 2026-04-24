@@ -165,7 +165,7 @@ export const bpmnApi = {
   },
 
   // Generate user cases
-  generateUserCases: async (processId: string): Promise<{ cases: UserCase[] }> => {
+  generateUserCases: async (processId: string): Promise<any> => {
     const response = await api.post(`/api/bpmn/process/${processId}/cases`);
     return response.data;
   },

@@ -336,6 +336,129 @@ class AIService:
                 "postcondition": "",
                 "priority": "low"
             }]
+    async def generate_bpmn(
+        self,
+        process_name: str,
+        user_cases: List[Dict[str, Any]],
+        requirements: Dict[str, Any]
+    ) -> str:
+        """
+        根据用户用例和需求文档生成BPMN 2.0 XML
+        
+        Args:
+            process_name: 流程名称
+            user_cases: 用户用例列表
+            requirements: 结构化需求文档
+            
+        Returns:
+            BPMN 2.0 XML字符串
+        """
+        system_prompt = """你是一个BPMN流程设计专家，根据用户用例和需求文档生成标准的BPMN 2.0 XML。
+
+**BPMN 2.0 XML规范要点**：
+1. 使用标准命名空间：xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+2. 包含必要元素：process, startEvent, endEvent, userTask, sequenceFlow, exclusiveGateway
+3. 每个元素必须有唯一的id
+4. sequenceFlow必须正确连接sourceRef和targetRef
+5. 使用bpmndi命名空间定义图形信息（可选但推荐）
+
+**生成策略**：
+- 为每个用户用例的主流程创建对应的任务节点
+- 使用exclusiveGateway处理条件分支和异常流程
+- 合理设置任务名称和文档说明
+- 确保流程逻辑清晰、完整
+
+**输出格式**：
+直接返回完整的BPMN 2.0 XML字符串，不要包含任何其他文本或解释。
+
+**示例结构**：
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+             targetNamespace="http://bpmn.io/schema/bpmn"
+             id="Definitions_1">
+  <process id="Process_1" name="流程名称" isExecutable="true">
+    <startEvent id="StartEvent_1" name="开始"/>
+    <userTask id="Task_1" name="任务1"/>
+    <sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_1"/>
+    <endEvent id="EndEvent_1" name="结束"/>
+    <sequenceFlow id="Flow_2" sourceRef="Task_1" targetRef="EndEvent_1"/>
+  </process>
+</definitions>
+```
+"""
+        
+        user_message = f"""请根据以下信息生成BPMN 2.0 XML：
+
+**流程名称**：{process_name}
+
+**用户用例**：
+{json.dumps(user_cases, ensure_ascii=False, indent=2)}
+
+**需求文档**：
+{json.dumps(requirements, ensure_ascii=False, indent=2)}
+
+请生成完整的BPMN 2.0 XML，确保：
+1. 流程逻辑完整且符合用例描述
+2. 所有元素ID唯一
+3. 节点连接正确
+4. 包含适当的网关处理分支逻辑
+5. XML格式正确且可被BPMN引擎解析
+"""
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.3,  # 较低温度以获得更稳定的XML输出
+            )
+            
+            bpmn_xml = response.choices[0].message.content.strip()
+            
+            # 清理可能的markdown代码块标记
+            if bpmn_xml.startswith("```xml"):
+                bpmn_xml = bpmn_xml[6:]
+            if bpmn_xml.startswith("```"):
+                bpmn_xml = bpmn_xml[3:]
+            if bpmn_xml.endswith("```"):
+                bpmn_xml = bpmn_xml[:-3]
+            
+            bpmn_xml = bpmn_xml.strip()
+            
+            # 验证是否为有效的XML开头
+            if not bpmn_xml.startswith("<?xml") and not bpmn_xml.startswith("<definitions"):
+                # 如果没有XML声明，添加一个
+                bpmn_xml = '<?xml version="1.0" encoding="UTF-8"?>\n' + bpmn_xml
+            
+            return bpmn_xml
+            
+        except Exception as e:
+            # 返回一个基本的错误BPMN模板
+            error_bpmn = f"""<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             targetNamespace="http://bpmn.io/schema/bpmn"
+             id="Definitions_Error">
+  <process id="Process_Error" name="{process_name}" isExecutable="false">
+    <startEvent id="StartEvent_1" name="开始"/>
+    <userTask id="Task_Error" name="生成失败">
+      <documentation>错误信息: {str(e)}</documentation>
+    </userTask>
+    <sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_Error"/>
+    <endEvent id="EndEvent_1" name="结束"/>
+    <sequenceFlow id="Flow_2" sourceRef="Task_Error" targetRef="EndEvent_1"/>
+  </process>
+</definitions>"""
+            return error_bpmn
+
 
 
 # 创建全局AI服务实例
