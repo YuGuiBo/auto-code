@@ -161,7 +161,7 @@ export const UserCasesPage: FC = () => {
       </motion.header>
 
       {/* Stage Navigator */}
-      <StageNavigator currentStage={3} />
+      <StageNavigator currentStage={2} />
 
       {/* Save Success Message */}
       <AnimatePresence>

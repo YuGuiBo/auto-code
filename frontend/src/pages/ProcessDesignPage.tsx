@@ -96,7 +96,7 @@ export const ProcessDesignPage: FC = () => {
                 onClick={() => navigate('/requirements')}
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-purple-500/30"
               >
-                生成需求文档
+                前往需求文档
                 <ArrowRightIcon className="w-4 h-4" />
               </motion.button>
             </div>
@@ -105,7 +105,7 @@ export const ProcessDesignPage: FC = () => {
       </motion.header>
 
       {/* Stage Navigator */}
-      <StageNavigator currentStage={analysisMatrix ? 1 : 0} />
+      <StageNavigator currentStage={0} />
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">

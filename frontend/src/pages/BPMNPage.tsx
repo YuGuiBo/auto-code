@@ -8,6 +8,7 @@ import {
   CubeIcon,
   SparklesIcon,
   ArrowDownTrayIcon,
+  ArrowRightIcon,
   ExclamationCircleIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline';
@@ -158,7 +159,7 @@ export const BPMNPage: FC = () => {
       </motion.header>
 
       {/* Stage Navigator */}
-      <StageNavigator currentStage={4} />
+      <StageNavigator currentStage={3} />
 
       {/* Success Message */}
       <AnimatePresence>
@@ -193,7 +194,17 @@ export const BPMNPage: FC = () => {
           )}
 
           {/* Content */}
-          {!bpmnXml ? (
+          {isGenerating ? (
+            /* Loading State */
+            <div className="flex flex-col items-center justify-center h-64">
+              <div className="relative">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500"></div>
+                <SparklesIcon className="w-8 h-8 text-blue-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+              </div>
+              <p className="mt-4 text-gray-600 text-lg">AI正在生成BPMN流程图...</p>
+              <p className="mt-2 text-gray-400 text-sm">这可能需要几秒钟</p>
+            </div>
+          ) : !bpmnXml ? (
             /* Empty State - Generate BPMN */
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -211,6 +222,29 @@ export const BPMNPage: FC = () => {
                   ? 'AI将基于您的用户用例生成标准的BPMN 2.0流程定义，可直接导入到Flowable等流程引擎中使用。'
                   : '请先完成用户用例的生成，然后再生成BPMN流程图。'}
               </p>
+
+              {userCases ? (
+                <motion.button
+                  onClick={handleGenerateBPMN}
+                  disabled={isGenerating}
+                  className="px-8 py-4 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 mx-auto"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <SparklesIcon className="w-5 h-5" />
+                  <span>生成BPMN流程图</span>
+                </motion.button>
+              ) : (
+                <motion.button
+                  onClick={() => navigate('/cases')}
+                  className="px-8 py-4 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300 flex items-center space-x-2 mx-auto"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <span>前往用户用例</span>
+                  <ArrowRightIcon className="w-5 h-5" />
+                </motion.button>
+              )}
             </motion.div>
           ) : (
             /* Display BPMN */

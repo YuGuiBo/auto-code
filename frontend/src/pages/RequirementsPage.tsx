@@ -152,7 +152,7 @@ export const RequirementsPage: FC = () => {
       </motion.header>
 
       {/* Stage Navigator */}
-      <StageNavigator currentStage={2} />
+      <StageNavigator currentStage={1} />
 
       {/* Save Success Message */}
       <AnimatePresence>
@@ -181,6 +181,7 @@ export const RequirementsPage: FC = () => {
       >
         <div className="max-w-5xl mx-auto">
           {isGenerating ? (
+            /* Loading State */
             <div className="flex flex-col items-center justify-center h-64">
               <div className="relative">
                 <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500"></div>
@@ -188,6 +189,44 @@ export const RequirementsPage: FC = () => {
               </div>
               <p className="mt-4 text-gray-600 text-lg">AI正在生成需求文档...</p>
               <p className="mt-2 text-gray-400 text-sm">这可能需要几秒钟</p>
+            </div>
+          ) : !structuredRequirements ? (
+            /* Empty State */
+            <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl p-12 text-center">
+              <div className="w-20 h-20 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+                <DocumentTextIcon className="w-10 h-10 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                生成需求文档
+              </h2>
+              <p className="text-gray-600 mb-8 max-w-md mx-auto">
+                {analysisMatrix
+                  ? '基于您的分析矩阵，AI将为您生成详细的结构化需求文档，包括操作步骤、前置条件和后置条件。'
+                  : '请先完成分析矩阵的生成，然后再生成需求文档。'}
+              </p>
+
+              {analysisMatrix ? (
+                <motion.button
+                  onClick={handleGenerate}
+                  disabled={isGenerating}
+                  className="px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 mx-auto"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <SparklesIcon className="w-5 h-5" />
+                  <span>生成需求文档</span>
+                </motion.button>
+              ) : (
+                <motion.button
+                  onClick={() => navigate('/design')}
+                  className="px-8 py-4 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300 flex items-center space-x-2 mx-auto"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <span>前往分析矩阵</span>
+                  <ArrowRightIcon className="w-5 h-5" />
+                </motion.button>
+              )}
             </div>
           ) : isEditMode && editedRequirements ? (
             <EditableRequirementsView
