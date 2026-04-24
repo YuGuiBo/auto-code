@@ -3,6 +3,7 @@ import { FC, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChatContainer } from '../components/Chat';
 import { EditableMatrixCard } from '../components/Matrix';
+import { StageNavigator } from '../components/StageNavigator';
 import { useChatStore } from '../stores/chatStore';
 import { PencilIcon, CheckIcon, XMarkIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
 
@@ -102,6 +103,9 @@ export const ProcessDesignPage: FC = () => {
           )}
         </div>
       </motion.header>
+
+      {/* Stage Navigator */}
+      <StageNavigator currentStage={analysisMatrix ? 1 : 0} />
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
@@ -310,17 +314,6 @@ export const ProcessDesignPage: FC = () => {
                 </>
               )}
             </div>
-
-            {/* Next Step Button */}
-            {!isEditMode && (
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="w-full mt-6 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-medium shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 transition-shadow"
-              >
-                生成需求文档
-              </motion.button>
-            )}
           </motion.aside>
         )}
       </div>

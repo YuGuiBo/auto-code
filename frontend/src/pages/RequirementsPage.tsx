@@ -12,6 +12,7 @@ import {
 } from '@heroicons/react/24/outline';
 import StructuredRequirementsView from '../components/Requirements/StructuredRequirementsView';
 import EditableRequirementsView from '../components/Requirements/EditableRequirementsView';
+import { StageNavigator } from '../components/StageNavigator';
 import { StructuredRequirements } from '../services/api';
 
 export const RequirementsPage: FC = () => {
@@ -149,6 +150,9 @@ export const RequirementsPage: FC = () => {
           </div>
         </div>
       </motion.header>
+
+      {/* Stage Navigator */}
+      <StageNavigator currentStage={2} />
 
       {/* Save Success Message */}
       <AnimatePresence>

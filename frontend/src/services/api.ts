@@ -175,7 +175,9 @@ export const bpmnApi = {
     processId: string,
     cases: UserCase[]
   ): Promise<{ message: string }> => {
-    const response = await api.put(`/api/bpmn/process/${processId}/cases`, { cases });
+    const response = await api.put(`/api/bpmn/process/${processId}/cases`, {
+      user_cases: cases
+    });
     return response.data;
   },
 
