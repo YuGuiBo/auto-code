@@ -262,8 +262,8 @@ export const BpmnViewer: FC<BpmnViewerProps> = ({ xml, className = '' }) => {
       {/* BPMN 画布容器 */}
       <div
         ref={containerRef}
-        className="w-full h-full bg-white rounded-xl"
-        style={{ minHeight: '900px' }}
+        className="w-full bg-white rounded-xl"
+        style={{ height: '500px', minHeight: '500px' }}
       />
 
       {/* 加载状态 */}
