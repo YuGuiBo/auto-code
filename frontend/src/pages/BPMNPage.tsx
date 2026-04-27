@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useChatStore } from '../stores/chatStore';
 import { bpmnApi } from '../services/api';
 import { StageNavigator } from '../components/StageNavigator';
+import { BpmnViewer } from '../components/BpmnViewer';
 import {
   CubeIcon,
   SparklesIcon,
@@ -11,6 +12,8 @@ import {
   ArrowRightIcon,
   ExclamationCircleIcon,
   CheckCircleIcon,
+  CodeBracketIcon,
+  Square3Stack3DIcon,
 } from '@heroicons/react/24/outline';
 
 export const BPMNPage: FC = () => {
@@ -20,6 +23,7 @@ export const BPMNPage: FC = () => {
   const [bpmnXml, setBpmnXml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [viewMode, setViewMode] = useState<'diagram' | 'xml'>('diagram');
 
   useEffect(() => {
     if (!currentProcessId) {
@@ -253,17 +257,56 @@ export const BPMNPage: FC = () => {
               animate={{ opacity: 1, y: 0 }}
               className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl p-8"
             >
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-gray-900">
-                  BPMN 2.0 XML
+                  {viewMode === 'diagram' ? 'BPMN 流程图' : 'BPMN 2.0 XML'}
                 </h3>
+
+                {/* View Mode Toggle */}
+                <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                  <motion.button
+                    onClick={() => setViewMode('diagram')}
+                    className={`px-4 py-2 rounded-md font-medium transition-all flex items-center gap-2 ${
+                      viewMode === 'diagram'
+                        ? 'bg-white text-blue-600 shadow-md'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Square3Stack3DIcon className="w-4 h-4" />
+                    <span className="text-sm">流程图</span>
+                  </motion.button>
+                  <motion.button
+                    onClick={() => setViewMode('xml')}
+                    className={`px-4 py-2 rounded-md font-medium transition-all flex items-center gap-2 ${
+                      viewMode === 'xml'
+                        ? 'bg-white text-blue-600 shadow-md'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <CodeBracketIcon className="w-4 h-4" />
+                    <span className="text-sm">XML代码</span>
+                  </motion.button>
+                </div>
               </div>
 
-              <div className="bg-gray-900 rounded-xl p-6 overflow-auto max-h-[600px]">
-                <pre className="text-sm text-green-400 font-mono whitespace-pre-wrap break-words">
-                  {bpmnXml}
-                </pre>
-              </div>
+              {/* Content based on view mode */}
+              {viewMode === 'diagram' ? (
+                /* BPMN Diagram View */
+                <div className="h-[600px]">
+                  <BpmnViewer xml={bpmnXml} />
+                </div>
+              ) : (
+                /* XML Code View */
+                <div className="bg-gray-900 rounded-xl p-6 overflow-auto max-h-[600px]">
+                  <pre className="text-sm text-green-400 font-mono whitespace-pre-wrap break-words">
+                    {bpmnXml}
+                  </pre>
+                </div>
+              )}
             </motion.div>
           )}
         </div>

@@ -360,24 +360,26 @@ class AIService:
 2. 包含必要元素：process, startEvent, endEvent, userTask, sequenceFlow, exclusiveGateway
 3. 每个元素必须有唯一的id
 4. sequenceFlow必须正确连接sourceRef和targetRef
-5. 使用bpmndi命名空间定义图形信息（可选但推荐）
+5. **必须包含 BPMNDiagram 元素定义图形坐标** - 这是关键！
 
 **生成策略**：
 - 为每个用户用例的主流程创建对应的任务节点
 - 使用exclusiveGateway处理条件分支和异常流程
 - 合理设置任务名称和文档说明
 - 确保流程逻辑清晰、完整
+- **必须为每个元素定义图形坐标（BPMNShape 和 BPMNEdge）**
 
 **输出格式**：
 直接返回完整的BPMN 2.0 XML字符串，不要包含任何其他文本或解释。
 
-**示例结构**：
+**重要：必须包含完整的 BPMNDiagram 定义！示例结构**：
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
              xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
              xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
              targetNamespace="http://bpmn.io/schema/bpmn"
              id="Definitions_1">
   <process id="Process_1" name="流程名称" isExecutable="true">
@@ -387,8 +389,52 @@ class AIService:
     <endEvent id="EndEvent_1" name="结束"/>
     <sequenceFlow id="Flow_2" sourceRef="Task_1" targetRef="EndEvent_1"/>
   </process>
+  
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">
+      <bpmndi:BPMNShape id="Shape_StartEvent_1" bpmnElement="StartEvent_1">
+        <dc:Bounds x="150" y="100" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="156" y="143" width="24" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_1" bpmnElement="Task_1">
+        <dc:Bounds x="250" y="78" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_EndEvent_1" bpmnElement="EndEvent_1">
+        <dc:Bounds x="400" y="100" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="406" y="143" width="24" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Edge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="186" y="118"/>
+        <di:waypoint x="250" y="118"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="350" y="118"/>
+        <di:waypoint x="400" y="118"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
 </definitions>
 ```
+
+**坐标布局规则**：
+- StartEvent: 圆形，宽高36x36，起始位置(150, 100)
+- UserTask: 矩形，宽高100x80，水平间距150，垂直位置保持一致
+- ExclusiveGateway: 菱形，宽高50x50
+- EndEvent: 圆形，宽高36x36
+- 流程从左到右水平布局，适当留白
+- 分支流程适当向下偏移，避免重叠
+
+**重要：XML 特殊字符转义规则**：
+在 conditionExpression 中，必须正确转义 XML 特殊字符：
+- 小于号 < 必须写成 &lt;
+- 大于号 > 必须写成 &gt;
+- 与号 & 必须写成 &amp;
+- 示例：${amount &lt;= 200} 而不是 ${amount <= 200}
+- 示例：${amount &gt; 200} 而不是 ${amount > 200}
 """
         
         user_message = f"""请根据以下信息生成BPMN 2.0 XML：
