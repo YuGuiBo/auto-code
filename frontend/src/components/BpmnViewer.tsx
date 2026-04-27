@@ -52,12 +52,110 @@ export const BpmnViewer: FC<BpmnViewerProps> = ({ xml, className = '' }) => {
         
         if (!mounted) return;
         
-        // 自动居中并适应画布
+        // 获取画布和事件总线
         const canvas = viewer.get('canvas') as any;
+        const eventBus = viewer.get('eventBus') as any;
+        
+        // 手动实现鼠标滚轮缩放功能
+        const container = containerRef.current;
+        if (container) {
+          const handleWheel = (e: WheelEvent) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            const currentZoom = canvas.zoom();
+            const newZoom = Math.max(0.1, Math.min(4, currentZoom + delta));
+            canvas.zoom(newZoom);
+          };
+          
+          container.addEventListener('wheel', handleWheel, { passive: false });
+          
+          // 保存清理函数
+          (viewer as any)._wheelHandler = () => {
+            container.removeEventListener('wheel', handleWheel);
+          };
+        }
+        
+        // 手动实现画布拖动功能
+        let isPanning = false;
+        let startX = 0;
+        let startY = 0;
+        let lastX = 0;
+        let lastY = 0;
+        
+        if (container) {
+          const handleMouseDown = (e: MouseEvent) => {
+            // 鼠标左键或中键都可以拖动
+            if (e.button === 0 || e.button === 1) {
+              // 检查是否点击在BPMN元素上（排除工具栏按钮）
+              const target = e.target as HTMLElement;
+              const isToolbarButton = target.closest('button');
+              
+              if (!isToolbarButton) {
+                e.preventDefault();
+                isPanning = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                const viewbox = canvas.viewbox();
+                lastX = viewbox.x;
+                lastY = viewbox.y;
+                container.style.cursor = 'grabbing';
+              }
+            }
+          };
+          
+          const handleMouseMove = (e: MouseEvent) => {
+            if (isPanning) {
+              e.preventDefault();
+              const dx = startX - e.clientX;
+              const dy = startY - e.clientY;
+              const currentZoom = canvas.zoom();
+              canvas.viewbox({
+                x: lastX + dx / currentZoom,
+                y: lastY + dy / currentZoom,
+                width: canvas.viewbox().width,
+                height: canvas.viewbox().height
+              });
+            }
+          };
+          
+          const handleMouseUp = (e: MouseEvent) => {
+            if (isPanning) {
+              e.preventDefault();
+              isPanning = false;
+              container.style.cursor = 'grab';
+            }
+          };
+          
+          const handleMouseLeave = () => {
+            if (isPanning) {
+              isPanning = false;
+              container.style.cursor = 'default';
+            }
+          };
+          
+          // 设置默认光标为可抓取
+          container.style.cursor = 'grab';
+          
+          container.addEventListener('mousedown', handleMouseDown);
+          document.addEventListener('mousemove', handleMouseMove);
+          document.addEventListener('mouseup', handleMouseUp);
+          container.addEventListener('mouseleave', handleMouseLeave);
+          
+          // 保存清理函数
+          (viewer as any)._panHandlers = () => {
+            container.removeEventListener('mousedown', handleMouseDown);
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+            container.removeEventListener('mouseleave', handleMouseLeave);
+            container.style.cursor = 'default';
+          };
+        }
+        
+        // 自动居中并适应画布
         canvas.zoom('fit-viewport', 'auto');
         
         setIsLoading(false);
-        console.log('BPMN loaded successfully');
+        console.log('BPMN loaded successfully with custom pan and zoom');
       } catch (err: any) {
         console.error('Failed to load BPMN:', err);
         if (mounted) {
@@ -74,6 +172,13 @@ export const BpmnViewer: FC<BpmnViewerProps> = ({ xml, className = '' }) => {
       mounted = false;
       if (viewer) {
         try {
+          // 清理自定义事件监听器
+          if ((viewer as any)._wheelHandler) {
+            (viewer as any)._wheelHandler();
+          }
+          if ((viewer as any)._panHandlers) {
+            (viewer as any)._panHandlers();
+          }
           viewer.destroy();
         } catch (e) {
           console.warn('Error destroying viewer:', e);
@@ -155,10 +260,10 @@ export const BpmnViewer: FC<BpmnViewerProps> = ({ xml, className = '' }) => {
       </div>
 
       {/* BPMN 画布容器 */}
-      <div 
-        ref={containerRef} 
+      <div
+        ref={containerRef}
         className="w-full h-full bg-white rounded-xl"
-        style={{ minHeight: '500px' }}
+        style={{ minHeight: '900px' }}
       />
 
       {/* 加载状态 */}

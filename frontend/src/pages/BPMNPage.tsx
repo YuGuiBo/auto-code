@@ -296,12 +296,12 @@ export const BPMNPage: FC = () => {
               {/* Content based on view mode */}
               {viewMode === 'diagram' ? (
                 /* BPMN Diagram View */
-                <div className="h-[600px]">
+                <div className="h-[900px]">
                   <BpmnViewer xml={bpmnXml} />
                 </div>
               ) : (
                 /* XML Code View */
-                <div className="bg-gray-900 rounded-xl p-6 overflow-auto max-h-[600px]">
+                <div className="bg-gray-900 rounded-xl p-6 overflow-auto max-h-[900px]">
                   <pre className="text-sm text-green-400 font-mono whitespace-pre-wrap break-words">
                     {bpmnXml}
                   </pre>
