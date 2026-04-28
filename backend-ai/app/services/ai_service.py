@@ -339,21 +339,21 @@ class AIService:
     async def generate_bpmn(
         self,
         process_name: str,
-        user_cases: List[Dict[str, Any]],
+        test_cases: List[Dict[str, Any]],
         requirements: Dict[str, Any]
     ) -> str:
         """
-        根据用户用例和需求文档生成BPMN 2.0 XML
+        根据测试案例和需求文档生成BPMN 2.0 XML
         
         Args:
             process_name: 流程名称
-            user_cases: 用户用例列表
+            test_cases: 测试案例列表
             requirements: 结构化需求文档
             
         Returns:
             BPMN 2.0 XML字符串
         """
-        system_prompt = """你是一个BPMN流程设计专家，根据用户用例和需求文档生成标准的BPMN 2.0 XML。
+        system_prompt = """你是一个BPMN流程设计专家，根据测试案例和需求文档生成标准的BPMN 2.0 XML。
 
 **BPMN 2.0 XML规范要点**：
 1. 使用标准命名空间：xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
@@ -442,14 +442,14 @@ class AIService:
 
 **流程名称**：{process_name}
 
-**用户用例**：
-{json.dumps(user_cases, ensure_ascii=False, indent=2)}
+**测试案例**：
+{json.dumps(test_cases, ensure_ascii=False, indent=2)}
 
 **需求文档**：
 {json.dumps(requirements, ensure_ascii=False, indent=2)}
 
 请生成完整的BPMN 2.0 XML，确保：
-1. 流程逻辑完整且符合用例描述
+1. 流程逻辑完整且符合测试案例描述
 2. 所有元素ID唯一
 3. 节点连接正确
 4. 包含适当的网关处理分支逻辑
@@ -506,6 +506,260 @@ class AIService:
 </definitions>"""
             return error_bpmn
 
+
+
+    async def generate_test_cases(
+        self,
+        requirements: Dict[str, Any],
+        analysis_matrix: Dict[str, List[str]]
+    ) -> Dict[str, Any]:
+        """
+        根据需求文档和分析矩阵生成测试案例
+        
+        Args:
+            requirements: 结构化需求文档
+            analysis_matrix: 分析矩阵
+            
+        Returns:
+            测试案例数据（包含test_cases列表和metadata）
+        """
+        system_prompt = """你是一个测试案例设计专家，根据需求文档生成详细的测试案例。
+
+测试案例应该覆盖：
+1. **正常流程（normal）**: 标准的业务流程路径
+2. **条件分支（branch）**: 各种判断条件的不同路径
+3. **异常场景（exception）**: 错误处理、超时、拒绝等异常情况
+
+输出格式（JSON）：
+{
+  "test_cases": [
+    {
+      "id": "TC001",
+      "name": "测试案例名称",
+      "category": "normal/branch/exception",
+      "description": "详细描述这个测试案例要验证什么",
+      "preconditions": ["前置条件1", "前置条件2"],
+      "steps": [
+        {
+          "step_no": 1,
+          "actor": "执行者角色",
+          "action": "执行的操作",
+          "fields": {
+            "字段名1": "测试数据1",
+            "字段名2": "测试数据2"
+          },
+          "expected_result": "这一步的预期结果"
+        }
+      ],
+      "postconditions": ["后置条件1", "后置条件2"],
+      "expected_final_result": "整个测试案例的预期最终结果"
+    }
+  ],
+  "metadata": {
+    "total_cases": 5,
+    "normal_cases": 2,
+    "branch_cases": 2,
+    "exception_cases": 1,
+    "generated_at": "2024-01-01T10:00:00Z"
+  }
+}
+
+要求：
+- 至少生成2个正常流程测试案例
+- 覆盖所有重要的条件分支
+- 至少包含2个异常场景测试案例
+- 每个测试案例的steps要详细，包含具体的测试数据
+- expected_result要明确、可验证
+"""
+        
+        from datetime import datetime
+        
+        user_message = f"""请根据以下需求文档和分析矩阵生成详细的测试案例：
+
+**需求文档**：
+{json.dumps(requirements, ensure_ascii=False, indent=2)}
+
+**分析矩阵**：
+{json.dumps(analysis_matrix, ensure_ascii=False, indent=2)}
+
+请生成完整的测试案例集合，确保覆盖所有重要的业务场景、条件分支和异常情况。"""
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.5,
+                response_format={"type": "json_object"}
+            )
+            
+            content = response.choices[0].message.content
+            print(f"AI返回的原始内容: {content[:200]}...")  # 打印前200个字符用于调试
+            
+            result = json.loads(content)
+            
+            # 检查result是否是字典类型
+            if not isinstance(result, dict):
+                print(f"警告：AI返回的不是字典对象，而是 {type(result)}，内容：{result}")
+                raise ValueError(f"AI返回的JSON格式不正确，期望对象但得到 {type(result)}")
+            
+            # 确保test_cases字段存在
+            if "test_cases" not in result:
+                print(f"警告：返回的结果中没有test_cases字段，result keys: {result.keys()}")
+                # 尝试修复：如果result本身是一个数组，包装它
+                if isinstance(result, list):
+                    result = {"test_cases": result}
+                else:
+                    raise ValueError("返回的结果中缺少test_cases字段")
+            
+            # 强制重新计算metadata以确保统计数据正确
+            test_cases = result.get("test_cases", [])
+            result["metadata"] = {
+                "total_cases": len(test_cases),
+                "normal_cases": sum(1 for tc in test_cases if tc.get("category") == "normal"),
+                "branch_cases": sum(1 for tc in test_cases if tc.get("category") == "branch"),
+                "exception_cases": sum(1 for tc in test_cases if tc.get("category") == "exception"),
+                "generated_at": datetime.now().isoformat()
+            }
+            
+            return result
+            
+        except Exception as e:
+            print(f"生成测试案例失败: {str(e)}")
+            import traceback
+            print(f"错误堆栈: {traceback.format_exc()}")
+            # 返回一个基本的测试案例模板
+            return {
+                "test_cases": [
+                    {
+                        "id": "TC001",
+                        "name": "基本流程测试",
+                        "category": "normal",
+                        "description": "测试标准业务流程",
+                        "preconditions": ["系统可用", "用户已登录"],
+                        "steps": [
+                            {
+                                "step_no": 1,
+                                "actor": "用户",
+                                "action": "提交申请",
+                                "fields": {},
+                                "expected_result": "申请提交成功"
+                            }
+                        ],
+                        "postconditions": ["申请已保存"],
+                        "expected_final_result": "流程正常完成"
+                    }
+                ],
+                "metadata": {
+                    "total_cases": 1,
+                    "normal_cases": 1,
+                    "branch_cases": 0,
+                    "exception_cases": 0,
+                    "generated_at": datetime.now().isoformat()
+                }
+            }
+    
+    async def process_test_case_feedback(
+        self,
+        current_test_cases: Dict[str, Any],
+        feedback: str,
+        requirements: Dict[str, Any],
+        analysis_matrix: Dict[str, List[str]]
+    ) -> Dict[str, Any]:
+        """
+        处理用户反馈，更新测试案例
+        
+        Args:
+            current_test_cases: 当前的测试案例数据
+            feedback: 用户反馈内容
+            requirements: 结构化需求文档
+            analysis_matrix: 分析矩阵
+            
+        Returns:
+            更新后的测试案例数据
+        """
+        system_prompt = """你是一个测试案例设计专家，根据用户反馈更新测试案例。
+
+用户可能会：
+1. 指出缺失的测试场景
+2. 指出测试案例中的错误
+3. 要求添加新的测试条件
+4. 要求修改某些测试步骤
+
+你的任务是：
+1. 分析用户反馈，理解问题所在
+2. 根据反馈添加新的测试案例或修改现有测试案例
+3. 保持原有正确的测试案例不变
+4. 返回完整更新后的测试案例集合
+
+**重要：你必须返回JSON格式的输出！**
+
+输出格式（JSON）：
+{
+  "test_cases": [...],
+  "metadata": {
+    "total_cases": 数量,
+    "normal_cases": 数量,
+    "branch_cases": 数量,
+    "exception_cases": 数量,
+    "generated_at": "时间戳"
+  }
+}
+"""
+        
+        from datetime import datetime
+        
+        user_message = f"""当前测试案例：
+{json.dumps(current_test_cases, ensure_ascii=False, indent=2)}
+
+用户反馈：
+{feedback}
+
+需求文档：
+{json.dumps(requirements, ensure_ascii=False, indent=2)}
+
+分析矩阵：
+{json.dumps(analysis_matrix, ensure_ascii=False, indent=2)}
+
+请分析用户反馈，更新测试案例。如果用户指出缺失场景，添加新的测试案例。如果指出错误，修正相应的测试案例。保持其他正确的测试案例不变。"""
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.5,
+                response_format={"type": "json_object"}
+            )
+            
+            result = json.loads(response.choices[0].message.content)
+            
+            # 确保metadata存在并更新时间戳
+            if "metadata" not in result:
+                test_cases = result.get("test_cases", [])
+                result["metadata"] = {
+                    "total_cases": len(test_cases),
+                    "normal_cases": sum(1 for tc in test_cases if tc.get("category") == "normal"),
+                    "branch_cases": sum(1 for tc in test_cases if tc.get("category") == "branch"),
+                    "exception_cases": sum(1 for tc in test_cases if tc.get("category") == "exception"),
+                }
+            
+            result["metadata"]["generated_at"] = datetime.now().isoformat()
+            
+            return result
+            
+        except Exception as e:
+            print(f"处理反馈失败: {str(e)}")
+            # 如果处理失败，返回原始测试案例
+            return current_test_cases
 
 
 # 创建全局AI服务实例

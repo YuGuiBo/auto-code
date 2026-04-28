@@ -18,7 +18,7 @@ import {
 
 export const BPMNPage: FC = () => {
   const navigate = useNavigate();
-  const { currentProcessId, userCases } = useChatStore();
+  const { currentProcessId, testCases } = useChatStore();
   const [isGenerating, setIsGenerating] = useState(false);
   const [bpmnXml, setBpmnXml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +83,7 @@ export const BPMNPage: FC = () => {
             </motion.div>
             <div>
               <h1 className="text-xl font-semibold text-gray-800">BPMN流程图</h1>
-              <p className="text-sm text-gray-500">基于用户用例生成标准BPMN 2.0流程定义</p>
+              <p className="text-sm text-gray-500">基于测试案例生成标准BPMN 2.0流程定义</p>
             </div>
           </div>
 
@@ -128,7 +128,7 @@ export const BPMNPage: FC = () => {
                   <span>开始新流程</span>
                 </motion.button>
               </>
-            ) : userCases ? (
+            ) : testCases ? (
               <motion.button
                 onClick={handleGenerateBPMN}
                 disabled={isGenerating}
@@ -155,7 +155,7 @@ export const BPMNPage: FC = () => {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <span>前往用户用例</span>
+                <span>前往测试案例</span>
               </motion.button>
             )}
           </div>
@@ -222,12 +222,12 @@ export const BPMNPage: FC = () => {
                 生成BPMN流程图
               </h2>
               <p className="text-gray-600 mb-8 max-w-md mx-auto">
-                {userCases
-                  ? 'AI将基于您的用户用例生成标准的BPMN 2.0流程定义，可直接导入到Flowable等流程引擎中使用。'
-                  : '请先完成用户用例的生成，然后再生成BPMN流程图。'}
+                {testCases
+                  ? 'AI将基于您的测试案例生成标准的BPMN 2.0流程定义，可直接导入到Flowable等流程引擎中使用。'
+                  : '请先完成测试案例的生成，然后再生成BPMN流程图。'}
               </p>
 
-              {userCases ? (
+              {testCases ? (
                 <motion.button
                   onClick={handleGenerateBPMN}
                   disabled={isGenerating}
@@ -245,7 +245,7 @@ export const BPMNPage: FC = () => {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
-                  <span>前往用户用例</span>
+                  <span>前往测试案例</span>
                   <ArrowRightIcon className="w-5 h-5" />
                 </motion.button>
               )}

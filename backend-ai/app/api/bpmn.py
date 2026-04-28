@@ -14,7 +14,9 @@ from app.schemas.process import (
     ProcessResponse,
     AnalysisMatrixUpdate,
     RequirementsUpdate,
-    UserCasesUpdate
+    UserCasesUpdate,
+    TestCasesUpdate,
+    TestCaseFeedback
 )
 from app.services.ai_service import ai_service
 
@@ -369,7 +371,7 @@ async def generate_bpmn(
     process_id: int,
     db: Session = Depends(get_db)
 ):
-    """根据用户用例生成BPMN流程定义"""
+    """根据测试案例生成BPMN流程定义"""
     process = db.query(Process).filter(Process.id == process_id).first()
     if not process:
         raise HTTPException(
@@ -377,17 +379,26 @@ async def generate_bpmn(
             detail=f"流程ID {process_id} 不存在"
         )
     
-    if not process.user_cases:
+    if not process.test_cases:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="用户用例为空，无法生成BPMN"
+            detail="测试案例为空，无法生成BPMN"
         )
     
     try:
+        # 从test_cases中提取test_cases数组
+        test_cases_list = process.test_cases.get("test_cases", []) if isinstance(process.test_cases, dict) else []
+        
+        if not test_cases_list:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="测试案例列表为空，无法生成BPMN"
+            )
+        
         # 调用AI服务生成BPMN
         bpmn_xml = await ai_service.generate_bpmn(
             process.name,
-            process.user_cases,
+            test_cases_list,
             process.structured_requirements
         )
         
@@ -413,6 +424,147 @@ async def generate_bpmn(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"生成BPMN时发生错误: {str(e)}"
+        )
+
+
+@router.post("/process/{process_id}/test-cases", response_model=ProcessResponse)
+async def generate_test_cases(
+    process_id: int,
+    db: Session = Depends(get_db)
+):
+    """根据需求文档生成测试案例"""
+    process = db.query(Process).filter(Process.id == process_id).first()
+    if not process:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"流程ID {process_id} 不存在"
+        )
+    
+    if not process.structured_requirements:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="结构化需求为空，无法生成测试案例"
+        )
+    
+    try:
+        # 调用AI服务生成测试案例
+        test_cases = await ai_service.generate_test_cases(
+            process.structured_requirements,
+            process.analysis_matrix or {}
+        )
+        
+        # 更新流程
+        process.test_cases = test_cases
+        process.current_stage = "test_cases"
+        db.commit()
+        db.refresh(process)
+        
+        # 保存到artifact
+        artifact = Artifact(
+            process_id=process_id,
+            artifact_type="test_case_draft",
+            content=test_cases,
+            meta_data={"generated_at": datetime.now().isoformat()},
+            created_by="system"
+        )
+        db.add(artifact)
+        db.commit()
+        
+        return process
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"生成测试案例时发生错误: {str(e)}"
+        )
+
+
+@router.put("/process/{process_id}/test-cases", response_model=ProcessResponse)
+async def update_test_cases(
+    process_id: int,
+    update: TestCasesUpdate,
+    db: Session = Depends(get_db)
+):
+    """更新测试案例"""
+    process = db.query(Process).filter(Process.id == process_id).first()
+    if not process:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"流程ID {process_id} 不存在"
+        )
+    
+    # 更新测试案例
+    process.test_cases = {"test_cases": update.test_cases}
+    db.commit()
+    db.refresh(process)
+    
+    return process
+
+
+@router.post("/process/{process_id}/test-cases/feedback", response_model=ProcessResponse)
+async def submit_test_case_feedback(
+    process_id: int,
+    feedback: TestCaseFeedback,
+    db: Session = Depends(get_db)
+):
+    """提交测试案例反馈，AI分析后更新测试案例"""
+    process = db.query(Process).filter(Process.id == process_id).first()
+    if not process:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"流程ID {process_id} 不存在"
+        )
+    
+    if not process.test_cases:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="测试案例为空，无法处理反馈"
+        )
+    
+    try:
+        # 调用AI服务分析反馈并更新测试案例
+        updated_test_cases = await ai_service.process_test_case_feedback(
+            current_test_cases=process.test_cases,
+            feedback=feedback.feedback,
+            requirements=process.structured_requirements or {},
+            analysis_matrix=process.analysis_matrix or {}
+        )
+        
+        # 更新流程
+        process.test_cases = updated_test_cases
+        db.commit()
+        db.refresh(process)
+        
+        # 保存反馈到artifact
+        feedback_artifact = Artifact(
+            process_id=process_id,
+            artifact_type="test_case_feedback",
+            content={"feedback": feedback.feedback, "issues": feedback.issues},
+            meta_data={"timestamp": datetime.now().isoformat()},
+            created_by="user"
+        )
+        db.add(feedback_artifact)
+        
+        # 保存更新后的测试案例
+        updated_artifact = Artifact(
+            process_id=process_id,
+            artifact_type="test_case_draft",
+            content=updated_test_cases,
+            meta_data={
+                "generated_at": datetime.now().isoformat(),
+                "updated_from_feedback": True
+            },
+            created_by="system"
+        )
+        db.add(updated_artifact)
+        db.commit()
+        
+        return process
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"处理反馈时发生错误: {str(e)}"
         )
 
 

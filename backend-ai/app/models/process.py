@@ -22,6 +22,9 @@ class Process(Base):
     # 用户用例
     user_cases = Column(JSON, comment="用户用例JSON数组")
     
+    # 测试案例
+    test_cases = Column(JSON, comment="测试案例JSON")
+    
     # BPMN相关
     bpmn_xml = Column(Text, comment="BPMN XML内容")
     bpmn_json = Column(JSON, comment="BPMN JSON配置")

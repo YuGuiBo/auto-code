@@ -33,7 +33,7 @@ const stages: Stage[] = [
   },
   {
     id: 2,
-    name: '用户用例',
+    name: '测试案例',
     path: '/cases',
     icon: UserGroupIcon,
   },
@@ -51,7 +51,7 @@ interface StageNavigatorProps {
 
 export const StageNavigator: FC<StageNavigatorProps> = ({ currentStage }) => {
   const navigate = useNavigate();
-  const { analysisMatrix, structuredRequirements, userCases } = useChatStore();
+  const { analysisMatrix, structuredRequirements, testCases } = useChatStore();
 
   // 判断阶段是否可访问
   const isStageAccessible = (stageId: number): boolean => {
@@ -60,10 +60,10 @@ export const StageNavigator: FC<StageNavigatorProps> = ({ currentStage }) => {
         return true;
       case 1: // 需求文档需要有矩阵
         return !!analysisMatrix;
-      case 2: // 用户用例需要有需求文档
+      case 2: // 测试案例需要有需求文档
         return !!structuredRequirements;
-      case 3: // BPMN需要有用户用例
-        return !!userCases && userCases.length > 0;
+      case 3: // BPMN需要有测试案例
+        return !!testCases && testCases.test_cases && testCases.test_cases.length > 0;
       default:
         return false;
     }
@@ -77,7 +77,7 @@ export const StageNavigator: FC<StageNavigatorProps> = ({ currentStage }) => {
       case 1:
         return !!structuredRequirements;
       case 2:
-        return !!userCases && userCases.length > 0;
+        return !!testCases && testCases.test_cases && testCases.test_cases.length > 0;
       case 3:
         return false; // BPMN是最后阶段，不需要完成标记
       default:

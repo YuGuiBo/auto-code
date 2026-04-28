@@ -4,7 +4,7 @@ import LoginPage from './pages/LoginPage'
 import HomePage from './pages/HomePage'
 import { ProcessDesignPage } from './pages/ProcessDesignPage'
 import { RequirementsPage } from './pages/RequirementsPage'
-import { UserCasesPage } from './pages/UserCasesPage'
+import { TestCasesPage } from './pages/TestCasesPage'
 import { BPMNPage } from './pages/BPMNPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -45,7 +45,7 @@ function App() {
           path="/cases"
           element={
             <PrivateRoute>
-              <UserCasesPage />
+              <TestCasesPage />
             </PrivateRoute>
           }
         />

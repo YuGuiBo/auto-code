@@ -118,6 +118,37 @@ export interface UserCase {
   postconditions: string[];
 }
 
+// 测试案例相关类型
+export interface TestCaseStep {
+  step_no: number;
+  actor: string;
+  action: string;
+  fields: Record<string, any>;
+  expected_result: string;
+}
+
+export interface TestCase {
+  id: string;
+  name: string;
+  category: 'normal' | 'branch' | 'exception';
+  description: string;
+  preconditions: string[];
+  steps: TestCaseStep[];
+  postconditions: string[];
+  expected_final_result: string;
+}
+
+export interface TestCasesData {
+  test_cases: TestCase[];
+  metadata: {
+    total_cases: number;
+    normal_cases: number;
+    branch_cases: number;
+    exception_cases: number;
+    generated_at?: string;
+  };
+}
+
 // API Functions
 export const bpmnApi = {
   // Analyze user requirements
@@ -177,6 +208,36 @@ export const bpmnApi = {
   ): Promise<{ message: string }> => {
     const response = await api.put(`/api/bpmn/process/${processId}/cases`, {
       user_cases: cases
+    });
+    return response.data;
+  },
+
+  // Generate test cases
+  generateTestCases: async (processId: string): Promise<any> => {
+    const response = await api.post(`/api/bpmn/process/${processId}/test-cases`);
+    return response.data;
+  },
+
+  // Update test cases
+  updateTestCases: async (
+    processId: string,
+    testCases: TestCasesData
+  ): Promise<any> => {
+    const response = await api.put(`/api/bpmn/process/${processId}/test-cases`, {
+      test_cases: testCases.test_cases
+    });
+    return response.data;
+  },
+
+  // Submit test case feedback
+  submitTestCaseFeedback: async (
+    processId: string,
+    feedback: string,
+    issues?: string[]
+  ): Promise<any> => {
+    const response = await api.post(`/api/bpmn/process/${processId}/test-cases/feedback`, {
+      feedback,
+      issues: issues || []
     });
     return response.data;
   },
