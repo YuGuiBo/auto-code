@@ -1,5 +1,6 @@
 import json
 from typing import List, Dict, Any, Optional
+import httpx
 from openai import OpenAI
 from app.core.config import settings
 
@@ -8,12 +9,112 @@ class AIService:
     """AI服务 - 支持DeepSeek和通义千问"""
     
     def __init__(self):
+        # 创建不使用代理的 httpx 客户端，避免公司代理导致的连接问题
+        http_client = httpx.Client(
+            proxy=None,
+            timeout=httpx.Timeout(300.0, connect=30.0)
+        )
         self.client = OpenAI(
             api_key=settings.AI_API_KEY,
-            base_url=settings.AI_BASE_URL
+            base_url=settings.AI_BASE_URL,
+            http_client=http_client
         )
         self.model = settings.AI_MODEL
     
+    def _normalize_test_cases(self, test_cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        规范化测试案例数据格式，确保每个测试案例的字段符合前端期望的结构。
+        处理AI可能返回的简化格式（如steps为字符串、preconditions为字符串等）。
+        """
+        import re
+        normalized = []
+        for tc in test_cases:
+            if not isinstance(tc, dict):
+                continue
+            
+            # 规范化 preconditions: 确保是数组
+            preconditions = tc.get("preconditions", [])
+            if isinstance(preconditions, str):
+                # 尝试按句号、分号或换行拆分
+                preconditions = [p.strip() for p in re.split(r'[;；。\n]', preconditions) if p.strip()]
+            elif not isinstance(preconditions, list):
+                preconditions = []
+            
+            # 规范化 postconditions: 确保是数组
+            postconditions = tc.get("postconditions", [])
+            if isinstance(postconditions, str):
+                postconditions = [p.strip() for p in re.split(r'[;；。\n]', postconditions) if p.strip()]
+            elif not isinstance(postconditions, list):
+                postconditions = []
+            
+            # 规范化 steps: 确保是对象数组
+            steps = tc.get("steps", [])
+            if isinstance(steps, str):
+                # 将字符串步骤解析为结构化步骤
+                # 常见格式: "1. xxx 2. xxx" 或 "1、xxx 2、xxx"
+                step_parts = re.split(r'\d+[.、．]\s*', steps)
+                step_parts = [s.strip() for s in step_parts if s.strip()]
+                steps = []
+                for i, part in enumerate(step_parts, 1):
+                    steps.append({
+                        "step_no": i,
+                        "actor": "系统/用户",
+                        "action": part,
+                        "fields": {},
+                        "expected_result": ""
+                    })
+            elif isinstance(steps, list):
+                # 检查列表中的每个元素是否是正确格式
+                normalized_steps = []
+                for i, step in enumerate(steps, 1):
+                    if isinstance(step, str):
+                        # 字符串步骤转为对象
+                        normalized_steps.append({
+                            "step_no": i,
+                            "actor": "系统/用户",
+                            "action": step,
+                            "fields": {},
+                            "expected_result": ""
+                        })
+                    elif isinstance(step, dict):
+                        # 确保必要字段存在
+                        normalized_steps.append({
+                            "step_no": step.get("step_no", i),
+                            "actor": step.get("actor", "系统/用户"),
+                            "action": step.get("action", ""),
+                            "fields": step.get("fields", {}),
+                            "expected_result": step.get("expected_result", "")
+                        })
+                    else:
+                        normalized_steps.append({
+                            "step_no": i,
+                            "actor": "系统/用户",
+                            "action": str(step),
+                            "fields": {},
+                            "expected_result": ""
+                        })
+                steps = normalized_steps
+            else:
+                steps = []
+            
+            # 确保 expected_final_result 存在
+            expected_final_result = tc.get("expected_final_result", "")
+            if not expected_final_result:
+                expected_final_result = tc.get("expected_result", "流程执行完成")
+            
+            normalized.append({
+                "id": tc.get("id", f"TC{len(normalized)+1:03d}"),
+                "name": tc.get("name", "未命名测试案例"),
+                "category": tc.get("category", "normal"),
+                "description": tc.get("description", ""),
+                "preconditions": preconditions,
+                "steps": steps,
+                "postconditions": postconditions,
+                "expected_final_result": expected_final_result
+            })
+        
+        return normalized
+
     async def analyze_requirements(
         self, 
         user_message: str, 
@@ -362,11 +463,26 @@ class AIService:
 4. sequenceFlow必须正确连接sourceRef和targetRef
 5. **必须包含 BPMNDiagram 元素定义图形坐标** - 这是关键！
 
+**流程结构设计原则（通用，适用于任何审批/业务流程）**：
+
+1. **主干线性化**：流程主干按实际业务执行时序从左到右线性排列
+2. **审批节点模式**：每个审批/决策任务(userTask)后面紧跟一个exclusiveGateway，输出两条路径：
+   - 通过 → 继续主干流程
+   - 拒绝 → 连接到对应的终止结束事件
+3. **条件路由模式**：当业务规则决定流程走向时（如金额判断、天数判断等），使用exclusiveGateway作为路由器：
+   - 每个条件分支连接到不同的后续任务
+   - 分支最终应汇合回主干（使用合并网关）或各自到达终止点
+4. **终止节点清晰**：
+   - 成功路径最终汇合到一个"完成"结束事件
+   - 每个拒绝/驳回路径有独立的结束事件，并标注是哪个节点拒绝的
+5. **中文标签**：所有节点使用中文命名，清晰表达业务含义
+
 **生成策略**：
-- 为每个用户用例的主流程创建对应的任务节点
-- 使用exclusiveGateway处理条件分支和异常流程
-- 合理设置任务名称和文档说明
-- 确保流程逻辑清晰、完整
+- 分析测试案例中的 steps，提取出流程的主要活动节点
+- 从测试案例的 category=normal 案例确定主干流程
+- 从测试案例的 category=branch 案例确定条件分支
+- 从测试案例的 category=exception 案例确定异常/拒绝路径
+- 确保所有测试案例描述的路径在流程图中都能走通
 - **必须为每个元素定义图形坐标（BPMNShape 和 BPMNEdge）**
 
 **输出格式**：
@@ -420,14 +536,17 @@ class AIService:
 </definitions>
 ```
 
-**坐标布局规则**：
-- StartEvent: 圆形，宽高36x36，起始位置(150, 180) - 注意Y坐标从180开始，为流程名称留出空间
-- UserTask: 矩形，宽高100x80，水平间距150，垂直中心位置约200
-- ExclusiveGateway: 菱形，宽高50x50
-- EndEvent: 圆形，宽高36x36
-- 流程从左到右水平布局，适当留白
-- 分支流程适当向下偏移（Y坐标+120或更多），避免重叠
-- 整体布局：为流程名称预留顶部80-100px的空间，所有元素Y坐标建议从150以上开始
+**坐标布局规则（核心：一横行主干布局）**：
+- **所有主干节点必须在同一水平线上（Y=200）**，从左到右按执行顺序排列
+- StartEvent: 宽高36x36
+- UserTask: 宽高100x80
+- ExclusiveGateway: 宽高50x50
+- EndEvent: 宽高36x36
+- 主干节点水平间距约120-150px，所有主干节点的Y中心坐标保持一致（约Y=200）
+- **拒绝分支**：从审批结果网关向下延伸，拒绝结束事件放在网关正下方（Y=350），用垂直连线
+- **条件分支（需要额外审批）**：额外的审批任务放在主干线上方（Y=80），通过网关向上连接，审批完后再回到主干线
+- 整体效果：主干是一条清晰的水平线，拒绝节点挂在下方，可选审批节点挂在上方
+- 避免任何节点重叠，保持足够间距
 
 **重要：XML 特殊字符转义规则**：
 在 conditionExpression 中，必须正确转义 XML 特殊字符：
@@ -523,12 +642,25 @@ class AIService:
         Returns:
             测试案例数据（包含test_cases列表和metadata）
         """
-        system_prompt = """你是一个测试案例设计专家，根据需求文档生成详细的测试案例。
+        system_prompt = """你是一个测试案例设计专家，根据需求文档生成详细且完整的测试案例。
 
-测试案例应该覆盖：
-1. **正常流程（normal）**: 标准的业务流程路径
-2. **条件分支（branch）**: 各种判断条件的不同路径
-3. **异常场景（exception）**: 错误处理、超时、拒绝等异常情况
+**生成策略（适用于任何业务流程）**：
+
+第一步：从需求文档中提取所有业务规则(business_rules)，识别每条规则中的条件判断。
+第二步：对每个条件判断，使用等价类划分+边界值分析，确定需要覆盖的测试数据。
+第三步：对流程中的每个审批/决策节点，分别生成通过和拒绝的案例。
+第四步：组合多条件场景，确保条件之间的交叉组合得到覆盖。
+
+测试案例分为三大类：
+1. **正常流程（normal）**: 每条独立的从起点到终点的成功路径
+2. **条件分支（branch）**: 不同条件取值导致的不同流转路径（包含边界值）
+3. **异常场景（exception）**: 每个决策节点的拒绝/退回/超时等情况
+
+**覆盖完整性要求**：
+- 每条业务规则涉及的条件，至少生成：满足条件、不满足条件、边界值 三种案例
+- 流程中有N个审批节点，则异常场景至少覆盖每个节点的拒绝情况
+- 如果存在累计/历史状态相关的规则，需要测试状态转换前后的不同表现
+- 总案例数应能覆盖需求文档中所有规则的所有分支路径
 
 输出格式（JSON）：
 {
@@ -556,20 +688,19 @@ class AIService:
     }
   ],
   "metadata": {
-    "total_cases": 5,
-    "normal_cases": 2,
-    "branch_cases": 2,
-    "exception_cases": 1,
+    "total_cases": 10,
+    "normal_cases": 3,
+    "branch_cases": 4,
+    "exception_cases": 3,
     "generated_at": "2024-01-01T10:00:00Z"
   }
 }
 
-要求：
-- 至少生成2个正常流程测试案例
-- 覆盖所有重要的条件分支
-- 至少包含2个异常场景测试案例
+**重要**：
+- 生成前先列举出所有需要覆盖的路径组合，确保无遗漏
 - 每个测试案例的steps要详细，包含具体的测试数据
 - expected_result要明确、可验证
+- 宁多勿少，确保所有分支路径都有对应的测试案例
 """
         
         from datetime import datetime
@@ -594,13 +725,27 @@ class AIService:
                 model=self.model,
                 messages=messages,
                 temperature=0.5,
-                response_format={"type": "json_object"}
+                max_tokens=8000
             )
             
             content = response.choices[0].message.content
-            print(f"AI返回的原始内容: {content[:200]}...")  # 打印前200个字符用于调试
+            finish_reason = response.choices[0].finish_reason
+            print(f"AI返回的原始内容(完整): {content}")  # 打印完整内容用于调试
+            print(f"finish_reason: {finish_reason}, 内容长度: {len(content)}")
             
-            result = json.loads(content)
+            # 检查是否因为token限制被截断
+            if finish_reason == "length":
+                print("警告：AI输出被截断（达到max_tokens限制），可能导致JSON不完整")
+            
+            # 从返回内容中提取JSON（AI可能在JSON前后添加了说明文字）
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', content)
+            if json_match:
+                json_str = json_match.group(0)
+            else:
+                json_str = content
+            
+            result = json.loads(json_str)
             
             # 检查result是否是字典类型
             if not isinstance(result, dict):
@@ -616,8 +761,52 @@ class AIService:
                 else:
                     raise ValueError("返回的结果中缺少test_cases字段")
             
-            # 强制重新计算metadata以确保统计数据正确
+            # 检测AI是否将test_case内部字段错误地提升到了顶层
+            # 如果顶层有steps/postconditions/expected_final_result等字段，
+            # 说明AI把一个test_case的内容拆散了
+            top_level_steps = result.get("steps")
+            top_level_postconditions = result.get("postconditions")
+            top_level_expected = result.get("expected_final_result")
+            
             test_cases = result.get("test_cases", [])
+            
+            # 如果顶层有这些字段，尝试将它们合并回test_cases中的对应元素
+            if (top_level_steps or top_level_postconditions or top_level_expected) and test_cases:
+                print(f"检测到顶层字段泄漏，尝试修复...")
+                # 通常是最后一个test_case的字段被提升到了顶层
+                last_tc = test_cases[-1] if isinstance(test_cases[-1], dict) else {}
+                if top_level_steps and not last_tc.get("steps"):
+                    last_tc["steps"] = top_level_steps
+                if top_level_postconditions and not last_tc.get("postconditions"):
+                    last_tc["postconditions"] = top_level_postconditions
+                if top_level_expected and not last_tc.get("expected_final_result"):
+                    last_tc["expected_final_result"] = top_level_expected
+                test_cases[-1] = last_tc
+            
+            # 确保test_cases中的每个元素都是字典类型
+            # 如果AI返回的test_cases元素是字符串（如JSON字符串），尝试解析
+            parsed_test_cases = []
+            for tc in test_cases:
+                if isinstance(tc, dict):
+                    parsed_test_cases.append(tc)
+                elif isinstance(tc, str):
+                    try:
+                        parsed_tc = json.loads(tc)
+                        if isinstance(parsed_tc, dict):
+                            parsed_test_cases.append(parsed_tc)
+                        else:
+                            print(f"警告：test_case元素解析后不是字典: {type(parsed_tc)}")
+                    except json.JSONDecodeError:
+                        print(f"警告：test_case元素无法解析为JSON: {tc[:100]}")
+                else:
+                    print(f"警告：test_case元素类型异常: {type(tc)}")
+            
+            test_cases = parsed_test_cases
+            
+            # 规范化测试案例数据格式，确保前端能正确渲染
+            test_cases = self._normalize_test_cases(test_cases)
+            result["test_cases"] = test_cases
+            
             result["metadata"] = {
                 "total_cases": len(test_cases),
                 "normal_cases": sum(1 for tc in test_cases if tc.get("category") == "normal"),
@@ -742,17 +931,19 @@ class AIService:
             
             result = json.loads(response.choices[0].message.content)
             
-            # 确保metadata存在并更新时间戳
-            if "metadata" not in result:
-                test_cases = result.get("test_cases", [])
-                result["metadata"] = {
-                    "total_cases": len(test_cases),
-                    "normal_cases": sum(1 for tc in test_cases if tc.get("category") == "normal"),
-                    "branch_cases": sum(1 for tc in test_cases if tc.get("category") == "branch"),
-                    "exception_cases": sum(1 for tc in test_cases if tc.get("category") == "exception"),
-                }
+            # 规范化测试案例数据格式
+            test_cases = result.get("test_cases", [])
+            test_cases = self._normalize_test_cases(test_cases)
+            result["test_cases"] = test_cases
             
-            result["metadata"]["generated_at"] = datetime.now().isoformat()
+            # 重新计算metadata
+            result["metadata"] = {
+                "total_cases": len(test_cases),
+                "normal_cases": sum(1 for tc in test_cases if tc.get("category") == "normal"),
+                "branch_cases": sum(1 for tc in test_cases if tc.get("category") == "branch"),
+                "exception_cases": sum(1 for tc in test_cases if tc.get("category") == "exception"),
+                "generated_at": datetime.now().isoformat()
+            }
             
             return result
             
