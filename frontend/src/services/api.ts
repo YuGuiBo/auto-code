@@ -149,6 +149,20 @@ export interface TestCasesData {
   };
 }
 
+// BPMN 验证相关类型
+export interface ValidationReport {
+  total_cases: number;
+  passed_cases: number;
+  failed_cases: number;
+  all_passed: boolean;
+  summary: string;
+  test_script: string;
+  script_path: string;
+  execution_output: string;
+  execution_errors: string;
+  exit_code: number;
+}
+
 // API Functions
 export const bpmnApi = {
   // Analyze user requirements
@@ -245,6 +259,12 @@ export const bpmnApi = {
   // Generate BPMN
   generateBPMN: async (processId: string): Promise<{ bpmn_xml: string }> => {
     const response = await api.post(`/api/bpmn/process/${processId}/generate`);
+    return response.data;
+  },
+
+  // Validate BPMN against test cases
+  validateBPMN: async (processId: string): Promise<ValidationReport> => {
+    const response = await api.post(`/api/bpmn/process/${processId}/validate-bpmn`);
     return response.data;
   },
 

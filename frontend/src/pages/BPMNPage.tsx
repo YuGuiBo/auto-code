@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FC, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatStore } from '../stores/chatStore';
-import { bpmnApi } from '../services/api';
+import { bpmnApi, ValidationReport } from '../services/api';
 import { StageNavigator } from '../components/StageNavigator';
 import { BpmnViewer } from '../components/BpmnViewer';
 import {
@@ -14,6 +14,8 @@ import {
   CheckCircleIcon,
   CodeBracketIcon,
   Square3Stack3DIcon,
+  BeakerIcon,
+  ShieldCheckIcon,
 } from '@heroicons/react/24/outline';
 
 export const BPMNPage: FC = () => {
@@ -24,6 +26,9 @@ export const BPMNPage: FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [viewMode, setViewMode] = useState<'diagram' | 'xml'>('diagram');
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationReport, setValidationReport] = useState<ValidationReport | null>(null);
+  const [showValidation, setShowValidation] = useState(false);
 
   useEffect(() => {
     if (!currentProcessId) {
@@ -48,6 +53,24 @@ export const BPMNPage: FC = () => {
       setError(err.response?.data?.detail || '生成BPMN失败，请稍后重试。');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleValidateBPMN = async () => {
+    if (!currentProcessId) return;
+
+    setIsValidating(true);
+    setError(null);
+
+    try {
+      const report = await bpmnApi.validateBPMN(currentProcessId);
+      setValidationReport(report);
+      setShowValidation(true);
+    } catch (err: any) {
+      console.error('Failed to validate BPMN:', err);
+      setError(err.response?.data?.detail || '验证BPMN失败，请稍后重试。');
+    } finally {
+      setIsValidating(false);
     }
   };
 
@@ -91,6 +114,25 @@ export const BPMNPage: FC = () => {
           <div className="flex items-center gap-3">
             {bpmnXml ? (
               <>
+                <motion.button
+                  onClick={handleValidateBPMN}
+                  disabled={isValidating}
+                  className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  {isValidating ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>验证中...</span>
+                    </>
+                  ) : (
+                    <>
+                      <BeakerIcon className="w-4 h-4" />
+                      <span>自动化测试</span>
+                    </>
+                  )}
+                </motion.button>
                 <motion.button
                   onClick={handleDownloadBPMN}
                   className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all duration-300 flex items-center gap-2"
@@ -309,6 +351,95 @@ export const BPMNPage: FC = () => {
               )}
             </motion.div>
           )}
+
+          {/* Validation Report Panel */}
+          <AnimatePresence>
+            {showValidation && validationReport && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="mt-8 bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl p-8"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <ShieldCheckIcon className="w-6 h-6 text-amber-500" />
+                    <h3 className="text-lg font-semibold text-gray-900">自动化测试报告</h3>
+                  </div>
+                  <button
+                    onClick={() => setShowValidation(false)}
+                    className="text-gray-400 hover:text-gray-600 text-sm"
+                  >
+                    收起 ✕
+                  </button>
+                </div>
+
+                {/* Summary */}
+                <div className={`p-4 rounded-xl mb-6 ${
+                  validationReport.all_passed
+                    ? 'bg-green-50 border border-green-200'
+                    : 'bg-amber-50 border border-amber-200'
+                }`}>
+                  <p className={`font-medium ${
+                    validationReport.all_passed ? 'text-green-700' : 'text-amber-700'
+                  }`}>
+                    {validationReport.summary}
+                  </p>
+                  <div className="flex gap-6 mt-3 text-sm">
+                    <span className="text-gray-600">
+                      总计: <strong>{validationReport.total_cases}</strong> 个测试案例
+                    </span>
+                    <span className="text-green-600">
+                      ✓ 通过: <strong>{validationReport.passed_cases}</strong>
+                    </span>
+                    <span className="text-red-600">
+                      ✗ 未通过: <strong>{validationReport.failed_cases}</strong>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Execution Output */}
+                {validationReport.execution_output && (
+                  <div className="mb-6">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">执行输出</h4>
+                    <div className="bg-gray-900 rounded-xl p-4 overflow-auto max-h-[400px]">
+                      <pre className="text-sm text-green-400 font-mono whitespace-pre-wrap">
+                        {validationReport.execution_output}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+
+                {/* Execution Errors */}
+                {validationReport.execution_errors && (
+                  <div className="mb-6">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">错误信息</h4>
+                    <div className="bg-red-950 rounded-xl p-4 overflow-auto max-h-[200px]">
+                      <pre className="text-sm text-red-300 font-mono whitespace-pre-wrap">
+                        {validationReport.execution_errors}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+
+                {/* Test Script */}
+                {validationReport.test_script && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-semibold text-gray-700">生成的测试脚本</h4>
+                      <span className="text-xs text-gray-400">{validationReport.script_path}</span>
+                    </div>
+                    <div className="bg-gray-900 rounded-xl p-4 overflow-auto max-h-[400px]">
+                      <pre className="text-sm text-blue-300 font-mono whitespace-pre-wrap">
+                        {validationReport.test_script}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>

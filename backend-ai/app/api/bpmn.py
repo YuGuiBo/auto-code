@@ -427,6 +427,112 @@ async def generate_bpmn(
         )
 
 
+@router.post("/process/{process_id}/validate-bpmn")
+async def validate_bpmn(
+    process_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    生成集成测试脚本并自动执行，验证BPMN流程是否正确。
+    
+    流程：
+    1. 从测试案例中提取表单字段、审批节点、审批步骤
+    2. 使用 Jinja2 模板生成可执行的 Python 集成测试脚本
+    3. 自动运行该脚本（模拟API调用，走完整审批流程）
+    4. 解析执行结果，返回脚本内容和测试报告
+    """
+    from app.services.test_generator import test_generator
+    from app.services.test_runner import test_runner
+    
+    process = db.query(Process).filter(Process.id == process_id).first()
+    if not process:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"流程ID {process_id} 不存在"
+        )
+    
+    if not process.bpmn_xml:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="BPMN XML为空，请先生成BPMN流程图"
+        )
+    
+    if not process.test_cases:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="测试案例为空，无法验证"
+        )
+    
+    # 提取测试案例列表
+    test_cases_list = process.test_cases.get("test_cases", []) if isinstance(process.test_cases, dict) else []
+    
+    if not test_cases_list:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="测试案例列表为空"
+        )
+    
+    try:
+        # 1. 使用 Jinja2 模板生成集成测试脚本
+        test_script = test_generator.generate_test_script(
+            process_name=process.name,
+            test_cases=test_cases_list,
+            bpmn_xml=process.bpmn_xml,
+            requirements=process.structured_requirements
+        )
+        
+        # 2. 运行测试脚本
+        run_result = test_runner.run_test_script(test_script, verbose=False)
+        
+        # 3. 构建返回结果
+        total_cases = run_result['total']
+        passed_cases = run_result['passed']
+        failed_cases = run_result['failed']
+        all_passed = run_result['all_passed']
+        
+        report_dict = {
+            "total_cases": total_cases,
+            "passed_cases": passed_cases,
+            "failed_cases": failed_cases,
+            "all_passed": all_passed,
+            "success_rate": run_result['success_rate'],
+            "summary": f"✅ 所有 {total_cases} 个测试案例验证通过！" if all_passed 
+                       else f"验证完成：{passed_cases}/{total_cases} 通过，{failed_cases} 个未通过。",
+            "test_script": test_script,
+            "execution_output": run_result['output'],
+            "execution_errors": run_result['stderr'],
+            "exit_code": run_result['exit_code'],
+            "errors": run_result['errors'],
+        }
+        
+        # 4. 保存到artifact（脚本保存在DB中而非文件系统）
+        artifact = Artifact(
+            process_id=process_id,
+            artifact_type="bpmn_integration_test",
+            content=report_dict,
+            meta_data={
+                "validated_at": datetime.now().isoformat(),
+                "all_passed": all_passed,
+                "total_cases": total_cases,
+                "passed_cases": passed_cases,
+                "failed_cases": failed_cases,
+            },
+            created_by="system"
+        )
+        db.add(artifact)
+        db.commit()
+        
+        return report_dict
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"验证BPMN时发生错误: {str(e)}"
+        )
+
+
 @router.post("/process/{process_id}/test-cases", response_model=ProcessResponse)
 async def generate_test_cases(
     process_id: int,

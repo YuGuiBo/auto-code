@@ -18,5 +18,8 @@ pydantic-settings==2.7.1
 # CORS
 python-dotenv==1.0.1
 
+# 模板引擎（用于生成测试脚本）
+jinja2==3.1.4
+
 # 工具
 python-dateutil==2.9.0

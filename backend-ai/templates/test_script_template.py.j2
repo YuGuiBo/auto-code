@@ -1,0 +1,464 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+{{ process_name }}自动化集成测试脚本
+{{ process_name }} Automated Integration Testing Script
+
+测试{{ process_name }}的完整流转（模拟API调用）
+适配后端 DynamicProcessController API: /api/{{ process_type }}/*
+"""
+
+import sys
+import os
+import json
+import re
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+# 设置Windows控制台UTF-8编码
+if sys.platform == 'win32':
+    import codecs
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')  # type: ignore
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')  # type: ignore
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+
+import requests
+import time
+import argparse
+from datetime import datetime, timedelta
+
+try:
+    from colorama import Fore, Style, init  # type: ignore
+    init(autoreset=True)
+    COLORAMA_AVAILABLE = True
+except ImportError:
+    COLORAMA_AVAILABLE = False
+    class _ForeColors:
+        GREEN = ""
+        RED = ""
+        YELLOW = ""
+        CYAN = ""
+    
+    class _StyleCodes:
+        RESET_ALL = ""
+    
+    Fore = _ForeColors()  # type: ignore
+    Style = _StyleCodes()  # type: ignore
+
+class {{ class_name }}:
+    def __init__(self, base_url="http://localhost:8080", verbose=False, username="admin", password="admin123"):
+        self.base_url = base_url
+        self.flow_type = "{{ process_type }}"
+        self.api_prefix = f"/api/{self.flow_type}"
+        self.verbose = verbose
+        self.test_results = []
+        self.token = None
+        self.username = username
+        self.password = password
+        self.test_mode = True
+        self.current_test_user = "test_applicant"
+        self.current_test_groups = "employee"
+        # 测试账号映射（角色 -> 模拟用户名和组）
+        self.accounts = {
+            "applicant": {"user": "test_applicant", "groups": "employee"},
+            "admin": {"user": "test_admin", "groups": "admin"},
+            "user": {"user": "test_user", "groups": "employee"},
+            "supervisor": {"user": "test_supervisor", "groups": "supervisor"},
+            "hr": {"user": "test_hr", "groups": "hr"},
+            "finance": {"user": "test_finance", "groups": "finance"},
+            "manager": {"user": "test_manager", "groups": "manager"},
+            "director": {"user": "test_director", "groups": "director"},
+            "ceo": {"user": "test_ceo", "groups": "ceo"},
+            {% if approval_roles %}{% for role in approval_roles %}"{{ role }}": {"user": "test_{{ role }}", "groups": "{{ role }}"}{{ "," if not loop.last else "" }}
+            {% endfor %}{% endif %}
+        }
+        
+        # 字段映射表（中文label → 英文name）
+        self.field_mapping = {
+            {% if form_fields %}{% for field in form_fields %}"{{ field.get('label', field.get('name', '')) }}": "{{ field.get('name', '') }}"{{ "," if not loop.last else "" }}
+            {% endfor %}{% endif %}
+        }
+        
+        # 加载配置文件以获取字段类型信息
+        self.config = self._load_config()
+    
+    def log(self, message: str, level: str = "INFO") -> None:
+        colors: Dict[str, Any] = {"ERROR": Fore.RED, "SUCCESS": Fore.GREEN, "INFO": Fore.CYAN}
+        symbols: Dict[str, str] = {"ERROR": "✗", "SUCCESS": "✓", "INFO": "i"}
+        color = colors.get(level, Fore.YELLOW)
+        symbol = symbols.get(level, "*")
+        print(f"{color}[{symbol}]{Style.RESET_ALL} [{datetime.now().strftime('%H:%M:%S')}] {message}")
+    
+    def vlog(self, message: str) -> None:
+        if self.verbose:
+            print(f"    {Fore.CYAN}→{Style.RESET_ALL} {message}")
+    
+    def login(self, username: Optional[str] = None, password: Optional[str] = None) -> bool:
+        """登录获取JWT Token"""
+        login_user = username or self.username
+        login_pass = password or self.password
+        url = f"{self.base_url}/api/auth/login"
+        try:
+            resp = requests.post(url, json={
+                "username": login_user,
+                "password": login_pass
+            }, timeout=10)
+            self.vlog(f"POST /api/auth/login -> {resp.status_code}")
+            if resp.status_code == 200:
+                data = resp.json()
+                self.token = data.get("data", {}).get("token")
+                if not self.token:
+                    self.token = data.get("token")
+                if self.token:
+                    self.log(f"登录成功: {login_user}", "SUCCESS")
+                    return True
+                else:
+                    self.log(f"登录响应中未找到token, 响应: {data}", "ERROR")
+                    return False
+            else:
+                self.log(f"登录失败: HTTP {resp.status_code}", "ERROR")
+                return False
+        except Exception as e:
+            self.log(f"登录异常: {e}", "ERROR")
+            return False
+    
+    def switch_role(self, role: str) -> None:
+        """切换当前模拟角色"""
+        account = self.accounts.get(role, {"user": f"test_{role}", "groups": role})
+        self.current_test_user = account["user"]
+        self.current_test_groups = account["groups"]
+        self.vlog(f"切换角色: {role} -> user={self.current_test_user}, groups={self.current_test_groups}")
+    
+    def _get_headers(self) -> Dict[str, str]:
+        """获取请求头"""
+        headers: Dict[str, str] = {"Content-Type": "application/json"}
+        if self.test_mode:
+            headers["X-Test-User"] = self.current_test_user
+            headers["X-Test-Groups"] = self.current_test_groups
+        elif self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        return headers
+    
+    def request(self, method: str, url: str, data: Optional[Dict[str, Any]] = None, params: Optional[Dict[str, Any]] = None) -> Tuple[bool, Dict[str, Any]]:
+        """发送HTTP请求（使用完整URL）"""
+        headers = self._get_headers()
+        try:
+            resp: Any
+            if method == "GET":
+                resp = requests.get(url, params=params, headers=headers, timeout=10)
+            else:
+                resp = requests.post(url, json=data, params=params, headers=headers, timeout=10)
+            self.vlog(f"{method} {url} -> {resp.status_code}")
+            if resp.status_code == 403:
+                self.vlog(f"⚠️ 403 Forbidden - user={self.current_test_user}, groups={self.current_test_groups}")
+            if resp.status_code == 200:
+                return True, resp.json()
+            else:
+                error_body = {}
+                try:
+                    error_body = resp.json()
+                except Exception:
+                    error_body = {"error": resp.status_code, "text": resp.text[:200]}
+                return False, error_body
+        except Exception as e:
+            return False, {"error": str(e)}
+    
+    def submit_request(self, **kwargs: Any) -> Optional[str]:
+        """
+        提交流程申请
+        调用: POST /api/{flowType}/apply
+        Body: 表单字段直接作为JSON body
+        """
+        data: Dict[str, Any] = {}
+        for key, value in kwargs.items():
+            english_key = self.field_mapping.get(key, key)
+            converted_value = self._convert_field_value(english_key, value)
+            data[english_key] = converted_value
+        
+        url = f"{self.base_url}{self.api_prefix}/apply"
+        self.vlog(f"提交数据: {json.dumps(data, ensure_ascii=False)}")
+        ok, resp = self.request("POST", url, data)
+        if ok and resp.get("success"):
+            process_id = resp.get("processInstanceId")
+            self.vlog(f"提交成功: processInstanceId={process_id}")
+            return process_id  # type: ignore
+        else:
+            error_msg = resp.get("message", resp.get("error", str(resp)))
+            self.log(f"    ⚠ 后端返回: {error_msg}", "ERROR")
+            self.vlog(f"提交失败详情: {resp}")
+        return None
+    
+    def _load_config(self) -> Dict[str, Any]:
+        """加载配置（内嵌字段定义）"""
+        return {
+            "formFields": [
+                {% if form_fields %}{% for field in form_fields %}{"name": "{{ field.get('name', '') }}", "label": "{{ field.get('label', '') }}", "type": "{{ field.get('type', 'string') }}"}{{ "," if not loop.last else "" }}
+                {% endfor %}{% endif %}
+            ]
+        }
+    
+    def _get_field_config(self, field_name: str) -> Optional[Dict[str, Any]]:
+        """获取字段配置"""
+        for field in self.config.get('formFields', []):
+            if field.get('name') == field_name:
+                return field
+        return None
+    
+    def _extract_number(self, value: Any) -> float:
+        """从值中提取数字"""
+        if isinstance(value, (int, float)):
+            return float(value)
+        match = re.search(r'[\d.]+', str(value))
+        if match:
+            return float(match.group())
+        raise ValueError(f"无法从 '{value}' 中提取数字")
+    
+    def _normalize_date(self, value: Any) -> str:
+        """标准化日期格式"""
+        if isinstance(value, str) and re.match(r'\d{4}-\d{2}-\d{2}', value):
+            return value
+        return str(value)
+    
+    def _parse_boolean(self, value: Any) -> bool:
+        """解析布尔值"""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.lower() in ('true', 'yes', '是', '1', 'y')
+        return bool(value)
+    
+    def _convert_field_value(self, field_name: str, value: Any) -> Any:
+        """根据配置的字段类型智能转换值"""
+        field_config = self._get_field_config(field_name)
+        if not field_config:
+            return value
+        
+        field_type = field_config.get('type', 'string')
+        
+        try:
+            if field_type == 'number':
+                return self._extract_number(value)
+            elif field_type == 'date':
+                return self._normalize_date(value)
+            elif field_type == 'boolean':
+                return self._parse_boolean(value)
+            else:
+                return str(value) if value is not None else value
+        except Exception as e:
+            self.vlog(f"警告: 字段 '{field_name}' 类型转换失败: {e}, 使用原值")
+            return value
+    
+    def get_tasks(self) -> List[Dict[str, Any]]:
+        """
+        查询待办任务列表
+        调用: GET /api/{flowType}/task/list
+        """
+        url = f"{self.base_url}{self.api_prefix}/task/list"
+        ok, resp = self.request("GET", url)
+        if ok:
+            # 响应可能是列表或包装在data中
+            if isinstance(resp, list):
+                return resp
+            return resp.get("data", resp.get("tasks", []))
+        return []
+    
+    def approve(self, task_id: str, approved: bool = True, comment: str = "测试审批") -> bool:
+        """
+        审批任务
+        调用: POST /api/{flowType}/approve/{taskId}?approved=true&comment=xxx
+        """
+        url = f"{self.base_url}{self.api_prefix}/approve/{task_id}"
+        params = {"approved": str(approved).lower(), "comment": comment}
+        ok, resp = self.request("POST", url, params=params)
+        return ok and resp.get("success", False)  # type: ignore
+    
+    def find_task(self, process_instance_id: str) -> Optional[str]:
+        """
+        从待办任务列表中查找指定流程实例的任务
+        """
+        tasks = self.get_tasks()
+        for task in tasks:
+            # 尝试多种方式匹配
+            task_process_id = task.get("processInstanceId", task.get("processId", ""))
+            if task_process_id == process_instance_id:
+                return task.get("taskId", task.get("id"))  # type: ignore
+        # 如果找不到精确匹配，返回最新的任务
+        if tasks:
+            self.vlog(f"未精确匹配到 processInstanceId={process_instance_id}，共有 {len(tasks)} 个待办任务")
+            # 尝试返回第一个任务（可能就是我们刚创建的）
+            return tasks[0].get("taskId", tasks[0].get("id"))
+        return None
+    
+    def _drain_remaining_tasks(self, process_instance_id: str, max_iterations: int = 5) -> int:
+        """自动完成剩余的后续任务（如申请人确认、通知类任务等）"""
+        completed = 0
+        for _ in range(max_iterations):
+            task_id = self.find_task(process_instance_id)
+            if task_id:
+                if self.approve(task_id, True, "确认知悉"):
+                    completed += 1
+                    self.vlog(f"完成后续任务: taskId={task_id}")
+                    time.sleep(0.5)
+                else:
+                    break
+            else:
+                break
+        return completed
+    
+    def test_health(self):
+        """
+        健康检查 - 验证后端服务是否可达
+        尝试 /actuator/health 或直接访问根路径
+        """
+        # 先尝试 Spring Boot Actuator
+        url = f"{self.base_url}/actuator/health"
+        ok, data = self.request("GET", url)
+        if ok:
+            status = data.get("status", "") == "UP"
+            result_str = "PASS" if status else "FAIL"
+            self.log(f"健康检查 (Actuator): {result_str}", "SUCCESS" if status else "ERROR")
+            self.test_results.append({"name": "健康检查", "status": result_str})
+            return status
+        
+        # 回退：尝试任务列表接口是否可达
+        url2 = f"{self.base_url}{self.api_prefix}/task/list"
+        ok2, data2 = self.request("GET", url2)
+        if ok2:
+            self.log(f"健康检查 (API可达): PASS", "SUCCESS")
+            self.test_results.append({"name": "健康检查", "status": "PASS"})
+            return True
+        
+        self.log(f"健康检查: FAIL - 服务不可达", "ERROR")
+        self.test_results.append({"name": "健康检查", "status": "FAIL"})
+        return False
+    
+    {% for test_case in test_cases %}
+    def test_{{ test_case.id }}(self):
+        """{{ test_case.description }}"""
+        name = "{{ test_case.name }}"
+        self.log(f"{'─'*50}", "INFO")
+        self.log(f"开始: {name}", "INFO")
+        start = time.time()
+        try:
+            # 1. 提交申请
+            self.switch_role("applicant")
+            self.log(f"  步骤1: 提交申请 - {% for field, value in test_case.form_data.items() %}{% if loop.index <= 3 %}{{ field }}={{ value }}{% if not loop.last %}, {% endif %}{% endif %}{% endfor %}", "INFO")
+            process_id = self.submit_request(
+                {% for field, value in test_case.form_data.items() %}{{ field }}="{{ value }}"{{ "," if not loop.last else "" }}
+                {% endfor %}
+            )
+            if not process_id:
+                raise Exception("提交失败")
+            self.log(f"  ✓ 申请提交成功: {process_id}", "SUCCESS")
+            
+            time.sleep(1)
+            
+            {% for step in test_case.approval_steps %}
+            # {{ loop.index + 1 }}. {{ step.description }}
+            self.switch_role("{{ step.assignee }}")
+            self.log(f"  步骤{{ loop.index + 1 }}: {{ step.description }} ({{ step.assignee }})...", "INFO")
+            task_id = self.find_task(process_id)
+            if not task_id:
+                raise Exception("未找到{{ step.assignee }}审批任务")
+            if not self.approve(task_id, {{ step.approved }}, "{{ step.comment }}"):
+                raise Exception("{{ step.assignee }}审批操作失败")
+            self.log(f"  ✓ {{ step.description }}: {{ '通过' if step.approved else '拒绝' }} - \"{{ step.comment }}\"", "SUCCESS")
+            
+            {% if not loop.last %}time.sleep(1)
+            
+            {% endif %}{% endfor %}
+            # 处理剩余环节（如申请人确认等通知类任务）
+            time.sleep(1)
+            remaining = self._drain_remaining_tasks(process_id)
+            if remaining:
+                self.log(f"  ✓ 已自动完成 {remaining} 个后续环节（确认/通知）", "SUCCESS")
+            
+            elapsed = time.time() - start
+            self.log(f"  ★ 流程完成! {name} ({elapsed:.2f}s) - {process_id}", "SUCCESS")
+            self.test_results.append({"name": name, "status": "PASS", "time": elapsed})
+            return True
+        except Exception as e:
+            self.log(f"  ✗ 失败: {name} - {e}", "ERROR")
+            self.test_results.append({"name": name, "status": "FAIL", "error": str(e)})
+            return False
+    
+    {% endfor %}
+    def print_summary(self):
+        print(f"\n{Fore.CYAN}{'='*60}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}测试摘要{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{'='*60}{Style.RESET_ALL}")
+        passed = sum(1 for r in self.test_results if r["status"] == "PASS")
+        failed = len(self.test_results) - passed
+        total_time = sum(r.get("time", 0) for r in self.test_results)
+        print(f"总测试数: {len(self.test_results)}")
+        print(f"{Fore.GREEN}通过: {passed}{Style.RESET_ALL}")
+        print(f"{Fore.RED}失败: {failed}{Style.RESET_ALL}")
+        print(f"总耗时: {total_time:.2f}s")
+        print(f"成功率: {(passed/len(self.test_results)*100):.1f}%" if self.test_results else "N/A")
+        print(f"{Fore.CYAN}{'='*60}{Style.RESET_ALL}\n")
+        if failed > 0:
+            print(f"{Fore.RED}失败的测试:{Style.RESET_ALL}")
+            for r in self.test_results:
+                if r["status"] == "FAIL":
+                    print(f"  - {r['name']}: {r.get('error', 'Unknown error')}")
+    
+    def run_all_tests(self):
+        print(f"\n{Fore.CYAN}{'='*60}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{{ process_name }}自动化测试{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{'='*60}{Style.RESET_ALL}")
+        print(f"测试时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"服务器: {self.base_url}")
+        print(f"API前缀: {self.api_prefix}")
+        print(f"模式: {'测试模式（X-Test-User）' if self.test_mode else 'JWT认证'}")
+        print(f"{Fore.CYAN}{'-'*60}{Style.RESET_ALL}\n")
+        
+        if not self.test_mode:
+            if not self.login():
+                self.log("登录失败，无法执行测试。请检查用户名/密码和服务器状态。", "ERROR")
+                self.test_results.append({"name": "登录认证", "status": "FAIL", "error": "登录失败"})
+                self.print_summary()
+                return False
+        else:
+            self.log("使用测试模式（模拟用户，不需要数据库用户）", "SUCCESS")
+        
+        self.test_health()
+        {% for test_case in test_cases %}self.test_{{ test_case.id }}()
+        {% endfor %}
+        self.print_summary()
+        return sum(1 for r in self.test_results if r["status"] == "FAIL") == 0
+
+def main():
+    parser = argparse.ArgumentParser(description="{{ process_name }}自动化测试")
+    parser.add_argument('--url', default='http://localhost:8080', help='服务器地址')
+    parser.add_argument('--user', default='admin', help='登录用户名 (默认: admin)')
+    parser.add_argument('--password', default='admin123', help='登录密码 (默认: admin123)')
+    parser.add_argument('--test', help='指定测试: health, {% for tc in test_cases %}{{ tc.id }}{{ ", " if not loop.last else "" }}{% endfor %}, all')
+    parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
+    args = parser.parse_args()
+    
+    tester = {{ class_name }}(args.url, args.verbose, args.user, args.password)
+    
+    if args.test:
+        if not tester.test_mode:
+            if not tester.login():
+                tester.log("登录失败，无法执行测试", "ERROR")
+                sys.exit(1)
+        
+        test_map = {
+            'health': tester.test_health,
+            {% for test_case in test_cases %}'{{ test_case.id }}': tester.test_{{ test_case.id }},
+            {% endfor %}'all': tester.run_all_tests
+        }
+        test_func = test_map.get(args.test.lower())
+        if test_func:
+            test_func()
+            if args.test.lower() != 'all':
+                tester.print_summary()
+        else:
+            print(f"{Fore.RED}未知测试: {args.test}{Style.RESET_ALL}")
+            print(f"可用测试: {', '.join(test_map.keys())}")
+    else:
+        tester.run_all_tests()
+
+if __name__ == "__main__":
+    main()
