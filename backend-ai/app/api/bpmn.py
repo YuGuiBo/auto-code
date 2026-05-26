@@ -197,6 +197,13 @@ async def generate_requirements(
         )
     
     try:
+        # 演示模式：直接返回已有数据
+        if process.status == "demo" and process.structured_requirements:
+            process.current_stage = "requirements"
+            db.commit()
+            db.refresh(process)
+            return process
+
         # 调用AI服务生成需求
         requirements = await ai_service.generate_requirements(process.analysis_matrix)
         
@@ -267,6 +274,13 @@ async def generate_user_cases(
         )
     
     try:
+        # 演示模式：直接返回已有数据
+        if process.status == "demo" and process.user_cases:
+            process.current_stage = "cases"
+            db.commit()
+            db.refresh(process)
+            return process
+
         # 调用AI服务生成用例
         cases = await ai_service.generate_user_cases(process.structured_requirements)
         
@@ -386,6 +400,12 @@ async def generate_bpmn(
         )
     
     try:
+        # 演示模式：直接返回已有数据
+        if process.status == "demo" and process.bpmn_xml:
+            process.current_stage = "design"
+            db.commit()
+            return {"bpmn_xml": process.bpmn_xml, "message": "BPMN生成成功（演示模式）"}
+
         # 从test_cases中提取test_cases数组
         test_cases_list = process.test_cases.get("test_cases", []) if isinstance(process.test_cases, dict) else []
         
@@ -553,6 +573,13 @@ async def generate_test_cases(
         )
     
     try:
+        # 演示模式：直接返回已有数据
+        if process.status == "demo" and process.test_cases:
+            process.current_stage = "test_cases"
+            db.commit()
+            db.refresh(process)
+            return process
+
         # 调用AI服务生成测试案例
         test_cases = await ai_service.generate_test_cases(
             process.structured_requirements,
@@ -671,6 +698,65 @@ async def submit_test_case_feedback(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"处理反馈时发生错误: {str(e)}"
+        )
+
+
+@router.post("/demo-init")
+async def demo_init(db: Session = Depends(get_db)):
+    """
+    演示模式初始化：从最近一个有完整数据的 process 复制，创建一个新的 demo process。
+    返回新 process 的 ID 和分析矩阵（相当于第一步 analyze 的结果）。
+    前端后续可逐步调用各阶段 API（会检测 demo 标记直接返回已有数据）。
+    """
+    try:
+        # 查找最近一个有 bpmn_xml 和 test_cases 的完整 process（作为演示模板）
+        source = db.query(Process).filter(
+            Process.bpmn_xml.isnot(None),
+            Process.test_cases.isnot(None),
+            Process.analysis_matrix.isnot(None),
+        ).order_by(Process.updated_at.desc()).first()
+
+        if not source:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="没有找到可用的演示数据，请先完成一次完整流程"
+            )
+
+        # 获取或创建默认项目
+        project_id = get_or_create_default_project(db)
+
+        # 复制为新的 demo process
+        demo_process = Process(
+            project_id=project_id,
+            name=f"演示_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            description="演示模式 - 基于历史流程数据",
+            analysis_matrix=source.analysis_matrix,
+            structured_requirements=source.structured_requirements,
+            user_cases=source.user_cases,
+            test_cases=source.test_cases,
+            bpmn_xml=source.bpmn_xml,
+            current_stage="analysis",
+            status="demo",
+            created_by="demo"
+        )
+        db.add(demo_process)
+        db.commit()
+        db.refresh(demo_process)
+
+        return {
+            "process_id": demo_process.id,
+            "message": "🎬 演示模式已启动！这是基于历史成功流程的快速演示，所有AI分析步骤将瞬间完成。",
+            "analysis_matrix": demo_process.analysis_matrix,
+            "stage": "analysis",
+            "suggestions": ["请点击下一步继续演示"]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"演示初始化失败: {str(e)}"
         )
 
 

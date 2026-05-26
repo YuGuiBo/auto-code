@@ -5,7 +5,7 @@ import { ChatContainer } from '../components/Chat';
 import { EditableMatrixCard } from '../components/Matrix';
 import { StageNavigator } from '../components/StageNavigator';
 import { useChatStore } from '../stores/chatStore';
-import { PencilIcon, CheckIcon, XMarkIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, CheckIcon, XMarkIcon, ArrowRightIcon, PlayIcon } from '@heroicons/react/24/outline';
 
 export const ProcessDesignPage: FC = () => {
   const navigate = useNavigate();
@@ -16,7 +16,9 @@ export const ProcessDesignPage: FC = () => {
     saveSuccess,
     sendMessage,
     analysisMatrix,
-    updateAnalysisMatrix
+    updateAnalysisMatrix,
+    isDemoMode,
+    startDemo
   } = useChatStore();
   
   const [isEditMode, setIsEditMode] = useState(false);
@@ -71,6 +73,22 @@ export const ProcessDesignPage: FC = () => {
               <h1 className="text-xl font-semibold text-gray-800">BPM-Nova</h1>
               <p className="text-sm text-gray-500">AI驱动的流程设计工具</p>
             </div>
+
+            {/* Demo Mode Button */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={startDemo}
+              disabled={isLoading}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-md ${
+                isDemoMode 
+                  ? 'bg-amber-500 text-white shadow-amber-500/30'
+                  : 'bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-white shadow-orange-500/30'
+              }`}
+            >
+              <PlayIcon className="w-4 h-4" />
+              {isDemoMode ? '🎬 演示中' : '演示模式'}
+            </motion.button>
           </div>
 
           {/* Progress Indicator and Next Step Button */}

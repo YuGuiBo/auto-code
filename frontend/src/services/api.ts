@@ -273,6 +273,12 @@ export const bpmnApi = {
     const response = await api.get('/api/bpmn/processes');
     return response.data;
   },
+
+  // 演示模式初始化
+  demoInit: async (): Promise<ProcessAnalysisResponse> => {
+    const response = await api.post('/api/bpmn/demo-init');
+    return response.data;
+  },
 };
 
 export default api;

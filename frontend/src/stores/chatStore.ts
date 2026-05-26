@@ -37,6 +37,8 @@ interface ChatState {
   setBpmnNeedsRegeneration: (needs: boolean) => void;
   setError: (error: string | null) => void;
   setSaveSuccess: (success: boolean) => void;
+  isDemoMode: boolean;
+  startDemo: () => Promise<void>;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -469,6 +471,58 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setSaveSuccess: (success: boolean) => {
     set({ saveSuccess: success });
+  },
+
+  isDemoMode: false,
+
+  startDemo: async () => {
+    const { addMessage } = get();
+
+    // 清空状态，重新开始
+    set({
+      messages: [],
+      currentProcessId: null,
+      analysisMatrix: null,
+      structuredRequirements: null,
+      userCases: null,
+      testCases: null,
+      bpmnXml: null,
+      bpmnNeedsRegeneration: false,
+      error: null,
+      isLoading: true,
+      isDemoMode: true,
+    });
+
+    try {
+      // 调用 demo-init 接口
+      const response = await bpmnApi.demoInit();
+
+      // 模拟用户输入（展示演示效果）
+      addMessage('我需要一个报销审批流程', 'user');
+
+      // 短暂延迟模拟思考
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // 显示 AI 回复
+      addMessage(response.message, 'assistant');
+
+      // 设置 process 数据
+      set({
+        currentProcessId: response.process_id.toString(),
+        analysisMatrix: response.analysis_matrix,
+        isLoading: false,
+      });
+    } catch (error: any) {
+      console.error('Demo init failed:', error);
+      let errorMessage = '演示模式启动失败';
+      if (error.response?.data?.detail) {
+        errorMessage = typeof error.response.data.detail === 'string'
+          ? error.response.data.detail
+          : '演示模式启动失败';
+      }
+      addMessage(errorMessage, 'assistant');
+      set({ error: errorMessage, isLoading: false, isDemoMode: false });
+    }
   },
 }));
 
