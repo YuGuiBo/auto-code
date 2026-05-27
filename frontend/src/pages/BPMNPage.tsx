@@ -20,9 +20,8 @@ import {
 
 export const BPMNPage: FC = () => {
   const navigate = useNavigate();
-  const { currentProcessId, testCases } = useChatStore();
+  const { currentProcessId, testCases, bpmnXml, setBpmnXml } = useChatStore();
   const [isGenerating, setIsGenerating] = useState(false);
-  const [bpmnXml, setBpmnXml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [viewMode, setViewMode] = useState<'diagram' | 'xml'>('diagram');
