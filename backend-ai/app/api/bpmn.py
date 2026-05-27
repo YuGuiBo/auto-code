@@ -704,23 +704,35 @@ async def submit_test_case_feedback(
 @router.post("/demo-init")
 async def demo_init(db: Session = Depends(get_db)):
     """
-    演示模式初始化：从最近一个有完整数据的 process 复制，创建一个新的 demo process。
+    演示模式初始化：从固定的演示源 process 复制，创建一个新的 demo process。
     返回新 process 的 ID 和分析矩阵（相当于第一步 analyze 的结果）。
     前端后续可逐步调用各阶段 API（会检测 demo 标记直接返回已有数据）。
     """
+    import os
     try:
-        # 查找最近一个有 bpmn_xml 和 test_cases 的完整 process（作为演示模板）
-        source = db.query(Process).filter(
-            Process.bpmn_xml.isnot(None),
-            Process.test_cases.isnot(None),
-            Process.analysis_matrix.isnot(None),
-        ).order_by(Process.updated_at.desc()).first()
+        # 从环境变量获取固定的演示源 process ID
+        demo_source_id = os.environ.get("DEMO_PROCESS_ID")
+        
+        if demo_source_id:
+            source = db.query(Process).filter(Process.id == int(demo_source_id)).first()
+            if not source:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"演示源流程 ID={demo_source_id} 不存在，请检查 .env 中的 DEMO_PROCESS_ID 配置"
+                )
+        else:
+            # 未配置固定ID时，回退到查找最近一个完整的 process
+            source = db.query(Process).filter(
+                Process.bpmn_xml.isnot(None),
+                Process.test_cases.isnot(None),
+                Process.analysis_matrix.isnot(None),
+            ).order_by(Process.updated_at.desc()).first()
 
-        if not source:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="没有找到可用的演示数据，请先完成一次完整流程"
-            )
+            if not source:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="没有找到可用的演示数据，请先完成一次完整流程，或在 .env 中配置 DEMO_PROCESS_ID"
+                )
 
         # 获取或创建默认项目
         project_id = get_or_create_default_project(db)
