@@ -133,6 +133,8 @@ public class DynamicProcessService {
         
         VariableConfig varConfig = taskConfig.getVariables();
         variables.put(varConfig.getApprovalResult(), approved);
+        // 始终设置 "approved" 变量，确保 BPMN 条件表达式 ${approved == true/false} 能匹配
+        variables.put("approved", approved);
         variables.put(varConfig.getCommentField(), comment);
         variables.put("comment", comment);  // 通用评论字段
         

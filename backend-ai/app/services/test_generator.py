@@ -60,8 +60,22 @@ class TestGenerator:
         class_name = ''.join(word.capitalize() for word in re.split(r'[-_]', process_type)) + 'FlowTester'
         api_prefix = f'/api/{process_type}'
 
-        # 2. 提取表单字段
+        # 2. 提取表单字段（包括从 BPMN XML 中解析的变量）
         form_fields = self._extract_form_fields(test_cases, requirements)
+        
+        # 2.1 从 BPMN XML 的条件表达式中提取引用的变量，补充到 form_fields
+        bpmn_variables = self._extract_variables_from_bpmn(bpmn_xml)
+        existing_field_names = {f['name'] for f in form_fields}
+        existing_field_labels = {f['label'] for f in form_fields}
+        for var_name in bpmn_variables:
+            if var_name not in existing_field_names and var_name not in existing_field_labels:
+                # 推断类型：含 days/Days/amount/Amount/count 等数字相关词的为 number
+                var_type = 'number' if any(kw in var_name.lower() for kw in ['days', 'amount', 'count', 'hours', 'total', 'cost', 'remaining']) else 'string'
+                form_fields.append({
+                    'name': var_name,
+                    'label': var_name,
+                    'type': var_type
+                })
 
         # 3. 提取审批角色
         approval_roles = self._extract_approval_roles(test_cases, requirements)
@@ -71,6 +85,9 @@ class TestGenerator:
 
         # 4.1 补充流程必填字段的默认值（确保生成的脚本能通过后端验证）
         self._fill_required_fields(template_test_cases, process_type)
+        
+        # 4.2 补充 BPMN 中引用但测试案例中缺失的变量
+        self._fill_bpmn_variables(template_test_cases, bpmn_variables)
 
         # 5. 准备模板数据
         template_data = {
@@ -359,17 +376,63 @@ class TestGenerator:
 
             # 如果没有提取到审批步骤，从角色列表自动生成
             if not approval_steps:
-                # 根据测试案例的 category 决定是通过还是拒绝
+                # 综合判断是否为拒绝场景：category + 名称关键词
                 category = tc.get('category', 'normal')
-                if category == 'exception':
-                    # 异常场景：第一个审批角色拒绝
-                    if approval_roles:
-                        approval_steps.append({
-                            'assignee': approval_roles[0],
-                            'approved': False,
-                            'comment': '审批拒绝',
-                            'description': f'{approval_roles[0]}审批拒绝'
-                        })
+                is_reject_scenario = category == 'exception'
+                reject_role = None
+                
+                # 从测试案例名称中推断拒绝场景和拒绝角色
+                reject_keywords = ['拒绝', '驳回', '不通过', '不批准', '退回']
+                if any(kw in tc_name for kw in reject_keywords):
+                    is_reject_scenario = True
+                    # 从名称中识别哪个角色拒绝
+                    for keyword in self._sorted_role_keys:
+                        if keyword in tc_name:
+                            reject_role = self.ROLE_MAPPING[keyword]
+                            break
+                
+                # 也从描述中推断
+                if not is_reject_scenario and any(kw in tc_desc for kw in reject_keywords):
+                    is_reject_scenario = True
+                    for keyword in self._sorted_role_keys:
+                        if keyword in tc_desc:
+                            reject_role = self.ROLE_MAPPING[keyword]
+                            break
+                
+                # 也检查 "假期不足"、"余额不足" 等自动拒绝场景
+                auto_reject_keywords = ['不足', '超出', '超过限额', '超限']
+                if any(kw in tc_name for kw in auto_reject_keywords):
+                    is_reject_scenario = True
+                
+                if is_reject_scenario:
+                    if reject_role and reject_role in approval_roles:
+                        # 在拒绝角色之前的角色都通过，拒绝角色拒绝
+                        reject_idx = approval_roles.index(reject_role)
+                        for i, role in enumerate(approval_roles):
+                            if i < reject_idx:
+                                approval_steps.append({
+                                    'assignee': role,
+                                    'approved': True,
+                                    'comment': '审批通过',
+                                    'description': f'{role}审批通过'
+                                })
+                            elif i == reject_idx:
+                                approval_steps.append({
+                                    'assignee': role,
+                                    'approved': False,
+                                    'comment': '审批不通过',
+                                    'description': f'{role}审批拒绝'
+                                })
+                                break  # 拒绝后不再有后续审批
+                    else:
+                        # 未识别到具体拒绝角色，第一个审批角色拒绝
+                        if approval_roles:
+                            approval_steps.append({
+                                'assignee': approval_roles[0],
+                                'approved': False,
+                                'comment': '审批拒绝',
+                                'description': f'{approval_roles[0]}审批拒绝'
+                            })
                 else:
                     # 正常/分支场景：所有审批角色通过
                     for role in approval_roles:
@@ -379,6 +442,43 @@ class TestGenerator:
                             'comment': '审批通过',
                             'description': f'{role}审批通过'
                         })
+
+            # 二次校正：如果从 steps 中提取到了审批步骤，但名称暗示应该拒绝，则修正
+            if approval_steps:
+                reject_keywords = ['拒绝', '驳回', '不通过', '不批准', '退回']
+                auto_reject_keywords = ['不足', '超出', '超过限额', '超限']
+                name_implies_reject = any(kw in tc_name for kw in reject_keywords + auto_reject_keywords)
+                
+                if name_implies_reject:
+                    # 从名称中识别哪个角色应该拒绝
+                    target_reject_role = None
+                    for keyword in self._sorted_role_keys:
+                        if keyword in tc_name and any(rk in tc_name for rk in reject_keywords):
+                            target_reject_role = self.ROLE_MAPPING[keyword]
+                            break
+                    
+                    # 检查当前审批步骤是否全部为通过（说明之前提取错误）
+                    all_approved = all(s['approved'] for s in approval_steps)
+                    if all_approved:
+                        if target_reject_role:
+                            # 找到目标角色的步骤，将其改为拒绝，并移除后续步骤
+                            new_steps = []
+                            for step in approval_steps:
+                                if step['assignee'] == target_reject_role:
+                                    step['approved'] = False
+                                    step['comment'] = '审批不通过'
+                                    step['description'] = f"{target_reject_role}审批拒绝"
+                                    new_steps.append(step)
+                                    break
+                                else:
+                                    new_steps.append(step)
+                            approval_steps = new_steps
+                        else:
+                            # 未识别具体拒绝角色，最后一个审批角色拒绝
+                            if len(approval_steps) > 0:
+                                approval_steps[-1]['approved'] = False
+                                approval_steps[-1]['comment'] = '审批不通过'
+                                approval_steps[-1]['description'] = f"{approval_steps[-1]['assignee']}审批拒绝"
 
             converted.append({
                 'id': safe_id,
@@ -468,6 +568,7 @@ class TestGenerator:
             'leave': {
                 'leaveType': '年假',
                 'leaveDays': 3,
+                'remainingDays': 15,
                 'reason': '个人事务',
                 'startDate': '2026-06-01',
                 'endDate': '2026-06-03',
@@ -513,6 +614,102 @@ class TestGenerator:
                 if field_name not in existing_english_keys and field_name not in form_data:
                     form_data[field_name] = default_value
 
+            tc['form_data'] = form_data
+
+    def _extract_variables_from_bpmn(self, bpmn_xml: str) -> List[str]:
+        """
+        从 BPMN XML 的条件表达式中提取所有引用的流程变量。
+        
+        解析 ${...} 表达式中的变量名，如：
+        - ${leaveDays <= 2} → leaveDays
+        - ${remainingDays >= leaveDays} → remainingDays, leaveDays
+        - ${amount > 5000} → amount
+        
+        这些变量是流程运行时必须存在的，因此也是提交申请时的必填字段。
+        """
+        if not bpmn_xml:
+            return []
+        
+        variables = set()
+        
+        # 匹配 ${...} 表达式
+        expressions = re.findall(r'\$\{([^}]+)\}', bpmn_xml)
+        
+        # 从表达式中提取变量名（英文标识符，排除数字和运算符）
+        for expr in expressions:
+            # 提取所有可能的变量名（字母开头的标识符）
+            identifiers = re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b', expr)
+            for ident in identifiers:
+                # 排除常见的非变量关键词
+                if ident.lower() not in {
+                    'true', 'false', 'null', 'and', 'or', 'not', 'eq', 'ne',
+                    'gt', 'lt', 'ge', 'le', 'empty', 'instanceof', 'div', 'mod',
+                    'approved', 'rejected',  # 这些通常是流程状态而非表单字段
+                }:
+                    variables.add(ident)
+        
+        # 也从 flowable:assignee="${...}" 和 candidateGroups 中提取（但这些不是表单字段）
+        # 排除 assignee 相关的变量
+        assignee_vars = set()
+        assignee_exprs = re.findall(r'(?:assignee|candidateUsers|candidateGroups)="\$\{([^}]+)\}"', bpmn_xml)
+        for expr in assignee_exprs:
+            identifiers = re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b', expr)
+            assignee_vars.update(identifiers)
+        
+        # 从结果中排除 assignee 相关变量和已知的角色/系统变量
+        system_vars = {
+            'initiator', 'assignee', 'candidateGroup', 'processInstanceId',
+            'taskId', 'executionId', 'execution',
+        }
+        
+        result = sorted(variables - assignee_vars - system_vars)
+        return result
+
+    def _fill_bpmn_variables(self, test_cases: List[Dict[str, Any]], bpmn_variables: List[str]) -> None:
+        """
+        补充 BPMN 中引用但测试案例 form_data 中缺失的变量。
+        为缺失的变量生成合理的默认测试值。
+        """
+        if not bpmn_variables:
+            return
+        
+        # 变量名 → 默认值映射（基于常见命名规则推断）
+        def _get_default_value(var_name: str) -> Any:
+            name_lower = var_name.lower()
+            if 'days' in name_lower:
+                return 10  # 默认天数（足够大以覆盖各种场景）
+            elif 'amount' in name_lower or 'cost' in name_lower or 'total' in name_lower:
+                return 1000
+            elif 'hours' in name_lower:
+                return 8
+            elif 'remaining' in name_lower:
+                return 15  # 剩余额度，设置较大值确保不被拒绝
+            elif 'count' in name_lower:
+                return 5
+            elif 'date' in name_lower:
+                return '2026-06-01'
+            elif 'rate' in name_lower or 'percent' in name_lower:
+                return 0.8
+            else:
+                return '测试值'
+        
+        for tc in test_cases:
+            form_data = tc.get('form_data', {})
+            
+            for var_name in bpmn_variables:
+                # 检查是否已存在（精确匹配或中文映射后匹配）
+                if var_name not in form_data:
+                    # 也检查中文键是否已映射到该英文名
+                    already_exists = False
+                    for key in list(form_data.keys()):
+                        english_key = self._to_camel_case(key) if not re.match(r'^[a-zA-Z]', key) else key
+                        if english_key == var_name:
+                            already_exists = True
+                            break
+                    
+                    if not already_exists:
+                        form_data[var_name] = _get_default_value(var_name)
+            
             tc['form_data'] = form_data
 
     def _to_camel_case(self, chinese_name: str) -> str:

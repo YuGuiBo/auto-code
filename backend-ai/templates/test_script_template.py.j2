@@ -231,7 +231,8 @@ class {{ class_name }}:
         """根据配置的字段类型智能转换值"""
         field_config = self._get_field_config(field_name)
         if not field_config:
-            return value
+            # 即使没有字段配置，也尝试智能推断类型
+            return self._auto_convert_value(field_name, value)
         
         field_type = field_config.get('type', 'string')
         
@@ -247,6 +248,29 @@ class {{ class_name }}:
         except Exception as e:
             self.vlog(f"警告: 字段 '{field_name}' 类型转换失败: {e}, 使用原值")
             return value
+    
+    def _auto_convert_value(self, field_name: str, value: Any) -> Any:
+        """当没有字段配置时，根据字段名和值格式自动推断类型并转换"""
+        if isinstance(value, (int, float, bool)):
+            return value  # 已经是正确类型
+        if not isinstance(value, str):
+            return value
+        # 尝试转为数字：如果值看起来像纯数字
+        if re.match(r'^-?\d+(\.\d+)?$', value.strip()):
+            try:
+                num = float(value.strip())
+                return int(num) if num == int(num) else num
+            except (ValueError, OverflowError):
+                pass
+        # 根据字段名推断是否应为数字
+        number_keywords = ['days', 'amount', 'count', 'hours', 'total', 'cost', 'remaining', 'num', 'quantity', 'price']
+        if any(kw in field_name.lower() for kw in number_keywords):
+            try:
+                num = self._extract_number(value)
+                return int(num) if num == int(num) else num
+            except (ValueError, TypeError):
+                pass
+        return value
     
     def get_tasks(self) -> List[Dict[str, Any]]:
         """
@@ -359,10 +383,11 @@ class {{ class_name }}:
             self.log(f"  步骤{{ loop.index + 1 }}: {{ step.description }} ({{ step.assignee }})...", "INFO")
             task_id = self.find_task(process_id)
             if not task_id:
-                raise Exception("未找到{{ step.assignee }}审批任务")
-            if not self.approve(task_id, {{ step.approved }}, "{{ step.comment }}"):
-                raise Exception("{{ step.assignee }}审批操作失败")
-            self.log(f"  ✓ {{ step.description }}: {{ '通过' if step.approved else '拒绝' }} - \"{{ step.comment }}\"", "SUCCESS")
+                self.log(f"  ⓘ {{ step.assignee }}无待办任务（流程可能已因条件分支结束或跳过此节点）", "INFO")
+            else:
+                if not self.approve(task_id, {{ step.approved }}, "{{ step.comment }}"):
+                    raise Exception("{{ step.assignee }}审批操作失败")
+                self.log(f"  ✓ {{ step.description }}: {{ '通过' if step.approved else '拒绝' }} - \"{{ step.comment }}\"", "SUCCESS")
             
             {% if not loop.last %}time.sleep(1)
             

@@ -437,6 +437,114 @@ class AIService:
                 "postcondition": "",
                 "priority": "low"
             }]
+    def _build_process_variables_prompt(self, process_name: str, requirements: Dict[str, Any], test_cases: List[Dict[str, Any]]) -> str:
+        """
+        根据流程名称和需求文档动态生成流程变量定义段落。
+        确保 BPMN 中条件表达式使用的变量名与后端实际传入的变量名一致。
+        """
+        # 1. 根据流程类型确定核心变量
+        name_lower = process_name.lower()
+        all_text = process_name
+        
+        # 从需求文档中提取更多上下文
+        if requirements:
+            for rule in requirements.get('business_rules', []):
+                all_text += ' ' + rule.get('description', '') + ' ' + rule.get('condition', '')
+            for data_req in requirements.get('data_requirements', []):
+                all_text += ' ' + ' '.join(data_req.get('attributes', []))
+        
+        # 2. 定义各流程类型的变量配置
+        variables_config = {
+            'leave': {
+                'description': '请假流程',
+                'variables': [
+                    ('leaveDays', '请假天数（整数，由员工填写）'),
+                    ('remainingDays', '剩余假期天数（整数，由系统提供）'),
+                    ('leaveType', '请假类型（字符串，如：年假、事假、病假）'),
+                ],
+                'condition_examples': [
+                    ('短期请假只需项目经理审批', '${leaveDays &lt;= 2}'),
+                    ('长期请假需要部门经理审批', '${leaveDays &gt; 2}'),
+                    ('假期不足自动拒绝', '${remainingDays &lt; leaveDays}'),
+                ]
+            },
+            'reimbursement': {
+                'description': '报销流程',
+                'variables': [
+                    ('amount', '单次报销金额（数字，由员工填写）'),
+                    ('monthlyTotal', '本月累计报销金额（数字，由系统计算）'),
+                ],
+                'condition_examples': [
+                    ('小额报销只需项目经理审批', '${amount &lt;= 200}'),
+                    ('大额报销需要部门经理审批', '${amount &gt; 200}'),
+                    ('累计金额超限需要额外审批', '${amount &gt; 200 or monthlyTotal &gt;= 800}'),
+                ]
+            },
+            'overtime': {
+                'description': '加班流程',
+                'variables': [
+                    ('overtimeHours', '加班时长（小时，数字）'),
+                ],
+                'condition_examples': [
+                    ('短时加班只需主管审批', '${overtimeHours &lt;= 4}'),
+                    ('长时加班需要部门经理审批', '${overtimeHours &gt; 4}'),
+                ]
+            },
+            'business-trip': {
+                'description': '出差流程',
+                'variables': [
+                    ('tripDays', '出差天数（整数）'),
+                    ('estimatedCost', '预估费用（数字）'),
+                ],
+                'condition_examples': [
+                    ('短期出差只需主管审批', '${tripDays &lt;= 3}'),
+                    ('长期出差需要部门经理审批', '${tripDays &gt; 3}'),
+                ]
+            },
+        }
+        
+        # 3. 匹配流程类型
+        matched_type = None
+        type_keywords = {
+            'leave': ['请假', '休假', 'leave'],
+            'reimbursement': ['报销', '费用', '经费', 'reimbursement', 'expense'],
+            'overtime': ['加班', 'overtime'],
+            'business-trip': ['出差', '差旅', 'business', 'trip', 'travel'],
+        }
+        
+        for ptype, keywords in type_keywords.items():
+            if any(kw in all_text for kw in keywords):
+                matched_type = ptype
+                break
+        
+        # 4. 构建 prompt 段落
+        lines = ['**流程变量定义**（必须在条件表达式中使用这些变量名，不要自创变量名）：']
+        lines.append('- `${approved}`: 审批结果（布尔值，true表示批准，false表示拒绝。每个审批任务完成后由系统自动设置）')
+        
+        if matched_type and matched_type in variables_config:
+            config = variables_config[matched_type]
+            for var_name, var_desc in config['variables']:
+                lines.append(f'- `${{{var_name}}}`: {var_desc}')
+            
+            lines.append('')
+            lines.append(f'**{config["description"]}条件分支示例**（请根据实际需求文档中的规则调整阈值）：')
+            for desc, expr in config['condition_examples']:
+                lines.append(f'- {desc}：`{expr}`')
+        else:
+            # 通用变量：从需求中推断
+            lines.append('- 请根据需求文档中的业务规则，使用英文驼峰命名法定义条件变量')
+            lines.append('- 变量名必须与申请表单中的字段名一致（如 amount, days, count 等）')
+            lines.append('')
+            lines.append('**注意**：条件变量名必须使用英文驼峰命名（如 leaveDays, amount），因为这些变量名会直接用于 Flowable 引擎的条件表达式计算。')
+        
+        lines.append('')
+        lines.append('**重要约束**：')
+        lines.append('- `${approved}` 是固定的审批结果变量名，所有审批决策网关必须使用它')
+        lines.append('- 条件路由网关（如按天数/金额判断走哪条分支）使用上述业务变量')
+        lines.append('- 不要混淆这两种网关：审批决策网关（判断通过/拒绝）vs 条件路由网关（判断业务条件）')
+        
+        return '\n'.join(lines)
+
     async def generate_bpmn(
         self,
         process_name: str,
@@ -454,6 +562,9 @@ class AIService:
         Returns:
             BPMN 2.0 XML字符串
         """
+        # 动态生成流程变量定义
+        process_variables_section = self._build_process_variables_prompt(process_name, requirements, test_cases)
+        
         system_prompt = """你是一个BPMN流程设计专家，根据测试案例和需求文档生成标准的BPMN 2.0 XML。
 
 **BPMN 2.0 XML规范要点**：
@@ -463,10 +574,7 @@ class AIService:
 4. sequenceFlow必须正确连接sourceRef和targetRef
 5. **必须包含 BPMNDiagram 元素定义图形坐标** - 这是关键！
 
-**流程变量定义**（必须在条件表达式中使用）：
-- `${amount}`: 单次申请金额（由员工填写）
-- `${monthlyTotal}`: 本月累计申请金额（由外部系统传入）
-- `${approved}`: 审批结果（true表示批准，false表示拒绝）
+""" + process_variables_section + """
 
 **条件表达式中的XML特殊字符转义（必须遵守！）**：
 - 小于号 < 必须写成 `&lt;`
