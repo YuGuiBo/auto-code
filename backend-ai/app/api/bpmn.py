@@ -509,6 +509,7 @@ async def validate_bpmn(
         passed_cases = run_result['passed']
         failed_cases = run_result['failed']
         all_passed = run_result['all_passed']
+        case_details = run_result.get('case_details', [])
         
         report_dict = {
             "total_cases": total_cases,
@@ -523,6 +524,7 @@ async def validate_bpmn(
             "execution_errors": run_result['stderr'],
             "exit_code": run_result['exit_code'],
             "errors": run_result['errors'],
+            "case_details": case_details,
         }
         
         # 4. 保存到artifact（脚本保存在DB中而非文件系统）
@@ -551,6 +553,50 @@ async def validate_bpmn(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"验证BPMN时发生错误: {str(e)}"
         )
+
+
+@router.get("/process/{process_id}/test-history")
+async def get_test_history(
+    process_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    获取测试历史记录列表。
+    返回该流程所有历史测试结果（按时间倒序），包含详细的执行步骤信息。
+    """
+    process = db.query(Process).filter(Process.id == process_id).first()
+    if not process:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"流程ID {process_id} 不存在"
+        )
+    
+    # 查询所有类型为 bpmn_integration_test 的 artifact
+    artifacts = db.query(Artifact).filter(
+        Artifact.process_id == process_id,
+        Artifact.artifact_type == "bpmn_integration_test"
+    ).order_by(Artifact.created_at.desc()).all()
+    
+    history = []
+    for artifact in artifacts:
+        content = artifact.content or {}
+        meta = artifact.meta_data or {}
+        history.append({
+            "id": artifact.id,
+            "validated_at": meta.get("validated_at", artifact.created_at.isoformat() if artifact.created_at else ""),
+            "all_passed": meta.get("all_passed", content.get("all_passed", False)),
+            "total_cases": meta.get("total_cases", content.get("total_cases", 0)),
+            "passed_cases": meta.get("passed_cases", content.get("passed_cases", 0)),
+            "failed_cases": meta.get("failed_cases", content.get("failed_cases", 0)),
+            "success_rate": content.get("success_rate", 0.0),
+            "summary": content.get("summary", ""),
+            "case_details": content.get("case_details", []),
+            "execution_output": content.get("execution_output", ""),
+            "execution_errors": content.get("execution_errors", ""),
+            "test_script": content.get("test_script", ""),
+        })
+    
+    return {"process_id": process_id, "history": history}
 
 
 @router.post("/process/{process_id}/test-cases", response_model=ProcessResponse)

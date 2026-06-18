@@ -161,6 +161,41 @@ export interface ValidationReport {
   execution_output: string;
   execution_errors: string;
   exit_code: number;
+  case_details?: TestCaseDetail[];
+}
+
+// 测试用例详细执行步骤
+export interface TestCaseDetailStep {
+  step: string;
+  status: 'passed' | 'failed' | 'completed';
+  detail: string;
+}
+
+export interface TestCaseDetail {
+  case_name: string;
+  status: 'passed' | 'failed';
+  steps: TestCaseDetailStep[];
+}
+
+// 测试历史记录
+export interface TestHistoryItem {
+  id: number;
+  validated_at: string;
+  all_passed: boolean;
+  total_cases: number;
+  passed_cases: number;
+  failed_cases: number;
+  success_rate: number;
+  summary: string;
+  case_details: TestCaseDetail[];
+  execution_output: string;
+  execution_errors: string;
+  test_script: string;
+}
+
+export interface TestHistoryResponse {
+  process_id: number;
+  history: TestHistoryItem[];
 }
 
 // API Functions
@@ -265,6 +300,12 @@ export const bpmnApi = {
   // Validate BPMN against test cases
   validateBPMN: async (processId: string): Promise<ValidationReport> => {
     const response = await api.post(`/api/bpmn/process/${processId}/validate-bpmn`);
+    return response.data;
+  },
+
+  // Get test history
+  getTestHistory: async (processId: string): Promise<TestHistoryResponse> => {
+    const response = await api.get(`/api/bpmn/process/${processId}/test-history`);
     return response.data;
   },
 

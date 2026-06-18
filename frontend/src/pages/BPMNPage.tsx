@@ -5,6 +5,8 @@ import { useChatStore } from '../stores/chatStore';
 import { bpmnApi, ValidationReport } from '../services/api';
 import { StageNavigator } from '../components/StageNavigator';
 import { BpmnViewer } from '../components/BpmnViewer';
+import { TestResultDetail } from '../components/TestCases/TestResultDetail';
+import { TestResultHistory } from '../components/TestCases/TestResultHistory';
 import {
   CubeIcon,
   SparklesIcon,
@@ -16,6 +18,7 @@ import {
   Square3Stack3DIcon,
   BeakerIcon,
   ShieldCheckIcon,
+  ClockIcon,
 } from '@heroicons/react/24/outline';
 
 export const BPMNPage: FC = () => {
@@ -27,7 +30,8 @@ export const BPMNPage: FC = () => {
   const [viewMode, setViewMode] = useState<'diagram' | 'xml'>('diagram');
   const [isValidating, setIsValidating] = useState(false);
   const [validationReport, setValidationReport] = useState<ValidationReport | null>(null);
-  const [showValidation, setShowValidation] = useState(false);
+  const [activePanel, setActivePanel] = useState<'none' | 'report' | 'history'>('none');
+  const [validationTab, setValidationTab] = useState<'details' | 'output' | 'script'>('details');
 
   useEffect(() => {
     if (!currentProcessId) {
@@ -64,7 +68,7 @@ export const BPMNPage: FC = () => {
     try {
       const report = await bpmnApi.validateBPMN(currentProcessId);
       setValidationReport(report);
-      setShowValidation(true);
+      setActivePanel('report');
     } catch (err: any) {
       console.error('Failed to validate BPMN:', err);
       setError(err.response?.data?.detail || '验证BPMN失败，请稍后重试。');
@@ -131,6 +135,15 @@ export const BPMNPage: FC = () => {
                       <span>自动化测试</span>
                     </>
                   )}
+                </motion.button>
+                <motion.button
+                  onClick={() => setActivePanel('history')}
+                  className="px-4 py-2 bg-gradient-to-r from-blue-400 to-indigo-500 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all duration-300 flex items-center gap-2"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <ClockIcon className="w-4 h-4" />
+                  <span>历史记录</span>
                 </motion.button>
                 <motion.button
                   onClick={handleDownloadBPMN}
@@ -353,7 +366,7 @@ export const BPMNPage: FC = () => {
 
           {/* Validation Report Panel */}
           <AnimatePresence>
-            {showValidation && validationReport && (
+            {activePanel === 'report' && validationReport && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -366,12 +379,23 @@ export const BPMNPage: FC = () => {
                     <ShieldCheckIcon className="w-6 h-6 text-amber-500" />
                     <h3 className="text-lg font-semibold text-gray-900">自动化测试报告</h3>
                   </div>
-                  <button
-                    onClick={() => setShowValidation(false)}
-                    className="text-gray-400 hover:text-gray-600 text-sm"
-                  >
-                    收起 ✕
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setActivePanel('history')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    >
+                      <ClockIcon className="w-4 h-4" />
+                      历史记录
+                    </motion.button>
+                    <button
+                      onClick={() => setActivePanel('none')}
+                      className="text-gray-400 hover:text-gray-600 text-sm"
+                    >
+                      收起 ✕
+                    </button>
+                  </div>
                 </div>
 
                 {/* Summary */}
@@ -398,38 +422,76 @@ export const BPMNPage: FC = () => {
                   </div>
                 </div>
 
-                {/* Execution Output */}
-                {validationReport.execution_output && (
-                  <div className="mb-6">
-                    <h4 className="text-sm font-semibold text-gray-700 mb-2">执行输出</h4>
-                    <div className="bg-gray-900 rounded-xl p-4 overflow-auto max-h-[400px]">
-                      <pre className="text-sm text-green-400 font-mono whitespace-pre-wrap">
-                        {validationReport.execution_output}
-                      </pre>
-                    </div>
-                  </div>
+                {/* Tab Navigation */}
+                <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 mb-6">
+                  <button
+                    onClick={() => setValidationTab('details')}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                      validationTab === 'details'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <BeakerIcon className="w-4 h-4" />
+                    详细流程
+                  </button>
+                  <button
+                    onClick={() => setValidationTab('output')}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                      validationTab === 'output'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <Square3Stack3DIcon className="w-4 h-4" />
+                    执行日志
+                  </button>
+                  <button
+                    onClick={() => setValidationTab('script')}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                      validationTab === 'script'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <CodeBracketIcon className="w-4 h-4" />
+                    测试脚本
+                  </button>
+                </div>
+
+                {/* Tab Content */}
+                {validationTab === 'details' && (
+                  <TestResultDetail caseDetails={validationReport.case_details || []} />
                 )}
 
-                {/* Execution Errors */}
-                {validationReport.execution_errors && (
-                  <div className="mb-6">
-                    <h4 className="text-sm font-semibold text-gray-700 mb-2">错误信息</h4>
-                    <div className="bg-red-950 rounded-xl p-4 overflow-auto max-h-[200px]">
-                      <pre className="text-sm text-red-300 font-mono whitespace-pre-wrap">
-                        {validationReport.execution_errors}
-                      </pre>
-                    </div>
-                  </div>
+                {validationTab === 'output' && (
+                  <>
+                    {validationReport.execution_output && (
+                      <div className="mb-6">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">执行输出</h4>
+                        <div className="bg-gray-900 rounded-xl p-4 overflow-auto max-h-[400px]">
+                          <pre className="text-sm text-green-400 font-mono whitespace-pre-wrap">
+                            {validationReport.execution_output}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
+                    {validationReport.execution_errors && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">错误信息</h4>
+                        <div className="bg-red-950 rounded-xl p-4 overflow-auto max-h-[200px]">
+                          <pre className="text-sm text-red-300 font-mono whitespace-pre-wrap">
+                            {validationReport.execution_errors}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
 
-                {/* Test Script */}
-                {validationReport.test_script && (
+                {validationTab === 'script' && validationReport.test_script && (
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-sm font-semibold text-gray-700">生成的测试脚本</h4>
-                      <span className="text-xs text-gray-400">{validationReport.script_path}</span>
-                    </div>
-                    <div className="bg-gray-900 rounded-xl p-4 overflow-auto max-h-[400px]">
+                    <div className="bg-gray-900 rounded-xl p-4 overflow-auto max-h-[500px]">
                       <pre className="text-sm text-blue-300 font-mono whitespace-pre-wrap">
                         {validationReport.test_script}
                       </pre>
@@ -437,6 +499,17 @@ export const BPMNPage: FC = () => {
                   </div>
                 )}
               </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Test History Panel */}
+          <AnimatePresence>
+            {activePanel === 'history' && currentProcessId && (
+<TestResultHistory
+                processId={currentProcessId}
+                onClose={() => setActivePanel("none")}
+                onBack={() => setActivePanel("report")}
+              />
             )}
           </AnimatePresence>
         </div>

@@ -9,7 +9,7 @@ import re
 import sys
 import subprocess
 import tempfile
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pathlib import Path
 
 
@@ -206,6 +206,9 @@ class TestRunner:
         success_rate = (passed / total * 100) if total > 0 else 0.0
         all_passed = (failed == 0 and total > 0)
 
+        # 提取每个测试用例的详细流程步骤
+        case_details = self._parse_case_details(output)
+
         return {
             'all_passed': all_passed,
             'total': total,
@@ -213,7 +216,132 @@ class TestRunner:
             'failed': failed,
             'success_rate': success_rate,
             'errors': errors,
+            'case_details': case_details,
         }
+
+    def _parse_case_details(self, output: str) -> List[Dict[str, Any]]:
+        """
+        从测试输出中解析每个测试用例的详细执行步骤。
+
+        实际输出格式示例：
+            [i] [09:31:08]   步骤1: 提交申请 - 单次报销金额=150, ...
+            [√] [09:31:08]   ✓ 申请提交成功: 38f9c126-...
+            [i] [09:31:09]   步骤2: pm审批通过 (pm)...
+            [√] [09:31:10]   ✓ pm审批通过: 通过 - "审批通过"
+            [i] [09:31:11]   步骤3: director审批拒绝 (director)...
+            [√] [09:31:11]   ✓ director审批拒绝: 拒绝 - "审批不通过"
+            [√] [09:31:12]   ★ 流程完成! 部门经理拒绝... (3.40s) - 38f9c126-...
+
+        以 "★ 流程完成" 或 "✗ 测试失败" 行作为每个用例的结束标记。
+
+        Returns:
+            list: 每个用例的详细信息
+        """
+        case_details = []
+        
+        # 先把输出按行分割，剥离日志前缀
+        lines = output.split('\n')
+        clean_lines = []
+        for line in lines:
+            # 剥离前缀：[√] [09:31:08]  或  [i] [09:31:08]  或  [✗] [09:31:08]
+            stripped = re.sub(r'^\s*\[[^\]]*\]\s*\[[^\]]*\]\s*', '', line)
+            clean_lines.append(stripped.strip())
+        
+        # 用 "★ 流程完成" 行来标识一个用例的结束，从中提取用例名
+        # 也处理 "✗ 测试失败" 作为失败用例的结束
+        current_steps = []
+        
+        for clean_line in clean_lines:
+            if not clean_line:
+                continue
+            
+            # 检查是否是流程完成行: "★ 流程完成! 用例名称 (Xs) - processId"
+            complete_match = re.match(r'★\s*流程完成[!！]?\s*(.+?)(?:\s*\(\d+\.\d+s\)|\s*-\s*[a-f0-9-]+)', clean_line)
+            if complete_match:
+                case_name = complete_match.group(1).strip()
+                # 添加流程完成步骤
+                current_steps.append({
+                    'step': '流程完成',
+                    'status': 'completed',
+                    'detail': case_name
+                })
+                case_details.append({
+                    'case_name': case_name,
+                    'status': 'passed',
+                    'steps': current_steps,
+                })
+                current_steps = []
+                continue
+            
+            # 检查是否是测试失败行: "✗ 测试失败: 用例名称 - 原因"
+            fail_case_match = re.match(r'[✗✘×]\s*测试失败[:：]?\s*(.+?)(?:\s*-\s*(.+))?$', clean_line)
+            if fail_case_match:
+                case_name = fail_case_match.group(1).strip()
+                detail = fail_case_match.group(2).strip() if fail_case_match.group(2) else ''
+                current_steps.append({
+                    'step': '测试失败',
+                    'status': 'failed',
+                    'detail': detail
+                })
+                case_details.append({
+                    'case_name': case_name,
+                    'status': 'failed',
+                    'steps': current_steps,
+                })
+                current_steps = []
+                continue
+            
+            # 步骤行: "步骤N: 描述 ..."
+            step_match = re.match(r'步骤\d+[:：]\s*(.+)', clean_line)
+            if step_match:
+                step_desc = step_match.group(1).strip()
+                # 清理尾部的 (角色)... 
+                step_desc = re.sub(r'\s*\([^)]*\)\.\.\.\s*$', '', step_desc)
+                # 清理尾部的 - 字段=值, 字段=值 部分，保留动作描述
+                action_part = step_desc.split(' - ')[0].strip() if ' - ' in step_desc else step_desc
+                current_steps.append({
+                    'step': action_part,
+                    'status': 'passed',
+                    'detail': step_desc if step_desc != action_part else ''
+                })
+                continue
+            
+            # 成功步骤: "✓ 描述"
+            success_match = re.match(r'[✓✔√]\s*(.+)', clean_line)
+            if success_match:
+                step_desc = success_match.group(1).strip()
+                # 如果上一步是"步骤N"，更新其detail而不是新增
+                if current_steps and current_steps[-1]['detail'] == '':
+                    current_steps[-1]['detail'] = step_desc
+                else:
+                    current_steps.append({
+                        'step': step_desc,
+                        'status': 'passed',
+                        'detail': ''
+                    })
+                continue
+            
+            # 失败步骤: "✗ 描述 - 原因"
+            fail_match = re.match(r'[✗✘×]\s*(.+?)(?:\s*-\s*(.+))?$', clean_line)
+            if fail_match:
+                step_desc = fail_match.group(1).strip()
+                detail = fail_match.group(2).strip() if fail_match.group(2) else ''
+                current_steps.append({
+                    'step': step_desc,
+                    'status': 'failed',
+                    'detail': detail
+                })
+                continue
+        
+        # 如果还有未关闭的步骤（没有 ★ 结尾），也要收集
+        if current_steps:
+            case_details.append({
+                'case_name': '未完成的测试',
+                'status': 'failed',
+                'steps': current_steps,
+            })
+        
+        return case_details
 
 
 # 创建全局实例
